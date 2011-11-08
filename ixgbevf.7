@@ -1,0 +1,58 @@
+.\" LICENSE
+.\"
+.\" This software program is released under the terms of a license agreement between you ('Licensee') and Intel.  Do not use or load this software or any associated materials (collectively, the 'Software') until you have carefully read the full terms and conditions of the LICENSE located in this software package.  By loading or using the Software, you agree to the terms of this Agreement.  If you do not agree with the terms of this Agreement, do not install or use the Software.
+.\"
+.\" * Other names and brands may be claimed as the property of others.
+.\"
+.TH ixgbevf 1 "March 14, 2011"
+
+.SH NAME
+ixgbevf \-This file describes the Linux* Base Driver for the Gigabit Family of Adapters.
+.SH SYNOPSIS
+.PD 0.4v
+modprobe ixgbevf [<option>=<VAL1>,<VAL2>,...]
+.PD 1v
+.SH DESCRIPTION
+This driver is intended for \fB2.6.18\fR or later kernels.  This driver includes support for Intel(R) Itanium(R)2-based systems.
+.LP
+This driver is only supported as a loadable module at this time.  Intel is not supplying patches against the kernel source toallow for static linking of the driver.  For questions related to hardware requirements, refer to the documentation supplied with your Intel adapter.  All hardware requirements listed apply to use with Linux.
+.SH OPTIONS
+The following optional parameters are used by entering them on the command line with the modprobe command.  
+For example:
+.IP
+modprobe ixgbevf InterruptThrottleRate=16000,16000
+.IP
+.B InterruptThrottleRate
+.IP
+.B Valid Range: 
+0,1,956-488281 (0=off, 1=dynamic)
+.IP
+.B Default Value: 
+8000
+This represents the maximum number of interrupts per second the controller generates.  InterruptThrottleRate is another setting used in interrupt moderation.  Dynamic mode uses a heuristic algorithm to adjust InterruptThrottleRate based on the current traffic load.
+.IP
+The default setting is configured to optimize interrupts for bulk 
+throughput while keeping CPU utilization low.  However this setting may 
+result in slower overall transfer speeds if network traffic consists 
+mostly of small packets.  If this is the case, change this value to 0. 
+.IP
+Un-supported Adapters: InterruptThrottleRate is NOT supported by 82542, 82543 or 82544-based adapters.
+.IP
+.B NOTE: 
+InterruptThrottleRate takes precedence over the TxAbsIntDelay and RxAbsIntDelay parameters.  In other words, minimizing the receive and/or transmit absolute delays does not force the controller to generate more interrupts than what the Interrupt Throttle Rate allows.
+.IP
+See the section "InterruptThrottleRate" in README.
+.LP
+.SH ethtool
+The driver utilizes the ethtool interface for driver configuration and diagnostics, as well as displaying statistical information.  ethtool version 1.8.1 or later is required for this functionality.
+.LP
+The latest release of ethtool can be found from http://ftp.kernel.org/pub/software/network/ethtool/.  The driver then must be recompiled in order to take advantage of the latest ethtool features.
+.LP
+ethtool 1.6 only supports a limited set of ethtool options.  Support for a more complete ethtool feature set can be enabled by upgrading ethtool to ethtool-1.8.1.  
+.SH SUPPORT
+For additional information, including supported adapters, building, and installation, see the README file included with the driver.
+.LP
+For general information, go to the Intel support website at:
+.IP
+.B http://support.intel.com
+.LP
