@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 82599 Virtual Function driver
-  Copyright(c) 1999 - 2010 Intel Corporation.
+  Copyright(c) 1999 - 2012 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -316,7 +316,7 @@ extern void ixgbevf_check_options(struct ixgbevf_adapter *adapter);
 extern char ixgbevf_driver_name[];
 extern const char ixgbevf_driver_version[];
 
-extern int ixgbevf_up(struct ixgbevf_adapter *adapter);
+extern void ixgbevf_up(struct ixgbevf_adapter *adapter);
 extern void ixgbevf_down(struct ixgbevf_adapter *adapter);
 extern void ixgbevf_reinit_locked(struct ixgbevf_adapter *adapter);
 extern void ixgbevf_reset(struct ixgbevf_adapter *adapter);

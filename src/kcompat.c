@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 82599 Virtual Function driver
-  Copyright(c) 1999 - 2010 Intel Corporation.
+  Copyright(c) 1999 - 2012 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -485,10 +485,9 @@ _kc_alloc_etherdev(int sizeof_priv)
 	int alloc_size;
 
 	alloc_size = sizeof(*dev) + sizeof_priv + IFNAMSIZ + 31;
-	dev = kmalloc(alloc_size, GFP_KERNEL);
+	dev = kzalloc(alloc_size, GFP_KERNEL);
 	if (!dev)
 		return NULL;
-	memset(dev, 0, alloc_size);
 
 	if (sizeof_priv)
 		dev->priv = (void *) (((unsigned long)(dev + 1) + 31) & ~31);
@@ -588,6 +587,18 @@ found_first:
 		return result + size;	/* Nope. */
 found_middle:
 	return result + ffs(tmp);
+}
+
+size_t _kc_strlcpy(char *dest, const char *src, size_t size)
+{
+	size_t ret = strlen(src);
+
+	if (size) {
+		size_t len = (ret >= size) ? size - 1 : ret;
+		memcpy(dest, src, len);
+		dest[len] = '\0';
+	}
+	return ret;
 }
 
 #endif /* 2.6.0 => 2.4.6 */
@@ -1023,10 +1034,6 @@ void _kc_skb_add_rx_frag(struct sk_buff *skb, int i, struct page *page,
 }
 #endif /* < 2.6.28 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30) )
-#endif /* < 2.6.30 */
-
 #ifndef ESX40
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35) )
 #endif /* < 2.6.35 */
@@ -1052,6 +1059,10 @@ int _kc_ethtool_op_set_flags(struct net_device *dev, u32 data, u32 supported)
 	return 0;
 }
 #endif /* < 2.6.36 */
+
+/*****************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38) )
+#endif /* < 2.6.38 */
 
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39) )

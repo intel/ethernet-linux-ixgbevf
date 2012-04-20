@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel 82599 Virtual Function driver
-  Copyright(c) 1999 - 2010 Intel Corporation.
+  Copyright(c) 1999 - 2012 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -61,9 +61,9 @@ static const char ixgbevf_driver_string[] =
 
 #define DRIVERNAPI "-NAPI"
 
-#define DRV_VERSION "2.4.0" DRIVERNAPI
+#define DRV_VERSION "2.6.2" DRIVERNAPI
 const char ixgbevf_driver_version[] = DRV_VERSION;
-static char ixgbevf_copyright[] = "Copyright (c) 2009-2011 Intel Corporation.";
+static char ixgbevf_copyright[] = "Copyright (c) 2009-2012 Intel Corporation.";
 
 extern s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw);
 
@@ -1017,6 +1017,7 @@ static irqreturn_t ixgbevf_msix_mbx(int irq, void *data)
 			DPRINTK(DRV, ERR,
 				"Last Request of type %2.2x to PF Nacked\n",
 				msg & 0xFF);
+		hw->mbx.v2p_mailbox |= IXGBE_VFMAILBOX_PFSTS;
 	}
 
 	/*
@@ -1375,7 +1376,7 @@ static void ixgbevf_configure_tx(struct ixgbevf_adapter *adapter)
 		 * bookkeeping if things aren't delivered in order.
 		 */
 		txctrl = IXGBE_READ_REG(hw, IXGBE_VFDCA_TXCTRL(j));
-		txctrl &= ~IXGBE_DCA_TXCTRL_TX_WB_RO_EN;
+		txctrl &= ~IXGBE_DCA_TXCTRL_DESC_WRO_EN;
 		IXGBE_WRITE_REG(hw, IXGBE_VFDCA_TXCTRL(j), txctrl);
 	}
 }
@@ -1619,11 +1620,6 @@ static int ixgbevf_write_uc_addr_list(struct net_device *netdev)
 	struct ixgbe_hw *hw = &adapter->hw;
 	int count = 0;
 
-	if ((netdev_uc_count(netdev)) > 10) {
-		printk(KERN_ERR "Too many unicast filters - No Space\n");
-		return -ENOSPC;
-	}
-
 	if (!netdev_uc_empty(netdev)) {
 		struct netdev_hw_addr *ha;
 		netdev_for_each_uc_addr(ha, netdev) {
@@ -1803,13 +1799,14 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 	adapter->stats.base_vfmprc = adapter->stats.last_vfmprc;
 }
 
-static int ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
+static void ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 {
 	struct net_device *netdev = adapter->netdev;
 	struct ixgbe_hw *hw = &adapter->hw;
 	int i, j = 0;
 	int num_rx_rings = adapter->num_rx_queues;
 	u32 txdctl, rxdctl;
+	u32 msg[2];
 
 #ifdef CONFIG_NETDEVICES_MULTIQUEUE
 	if (adapter->num_tx_queues > 1)
@@ -1855,6 +1852,10 @@ static int ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 					    0, IXGBE_RAH_AV);
 	}
 
+	msg[0] = IXGBE_VF_SET_LPE;
+	msg[1] = netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
+	hw->mbx.ops.write_posted(hw, msg, 2, 0);
+
 	clear_bit(__IXGBEVF_DOWN, &adapter->state);
 	ixgbevf_napi_enable_all(adapter);
 
@@ -1869,24 +1870,20 @@ static int ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 	adapter->flags |= IXGBE_FLAG_NEED_LINK_UPDATE;
 	adapter->link_check_timeout = jiffies;
 	mod_timer(&adapter->watchdog_timer, jiffies);
-	return 0;
 }
 
-int ixgbevf_up(struct ixgbevf_adapter *adapter)
+void ixgbevf_up(struct ixgbevf_adapter *adapter)
 {
-	int err;
 	struct ixgbe_hw *hw = &adapter->hw;
 
 	ixgbevf_configure(adapter);
 
-	err = ixgbevf_up_complete(adapter);
+	ixgbevf_up_complete(adapter);
 
 	/* clear any pending interrupts, may auto mask */
 	IXGBE_READ_REG(hw, IXGBE_VTEICR);
 
 	ixgbevf_irq_enable(adapter, true, true);
-
-	return err;
 }
 
 /**
@@ -2098,7 +2095,7 @@ void ixgbevf_reset(struct ixgbevf_adapter *adapter)
 	}
 }
 
-static void ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
+static int ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
                                        int vectors)
 {
 	int err, vector_threshold;
@@ -2134,6 +2131,7 @@ static void ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
 		DPRINTK(HW, DEBUG, "Unable to allocate MSI-X interrupts\n");
 		kfree(adapter->msix_entries);
 		adapter->msix_entries = NULL;
+		err = -ENOMEM;
 	} else {
 		/*
 		 * Adjust for only the vectors we'll use, which is minimum
@@ -2142,6 +2140,8 @@ static void ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
 		 */
 		adapter->num_msix_vectors = vectors;
 	}
+
+	return err;
 }
 
 /*
@@ -2239,7 +2239,7 @@ static int ixgbevf_set_interrupt_capability(struct ixgbevf_adapter *adapter)
 	for (vector = 0; vector < v_budget; vector++)
 		adapter->msix_entries[vector].entry = vector;
 
-	ixgbevf_acquire_msix_vectors(adapter, v_budget);
+	err = ixgbevf_acquire_msix_vectors(adapter, v_budget);
 
 out:
 #ifdef HAVE_TX_MQ
@@ -2883,9 +2883,7 @@ static int ixgbevf_open(struct net_device *netdev)
 	 */
 	ixgbevf_map_rings_to_vectors(adapter);
 
-	err = ixgbevf_up_complete(adapter);
-	if (err)
-		goto err_up;
+	ixgbevf_up_complete(adapter);
 
 	/* clear any pending interrupts, may auto mask */
 	IXGBE_READ_REG(hw, IXGBE_VTEICR);
@@ -2899,7 +2897,6 @@ static int ixgbevf_open(struct net_device *netdev)
 
 err_req_irq:
 	ixgbevf_down(adapter);
-err_up:
 	ixgbevf_free_irq(adapter);
 err_setup_rx:
 	ixgbevf_free_all_rx_resources(adapter);
@@ -3440,10 +3437,11 @@ static int ixgbevf_change_mtu(struct net_device *netdev, int new_mtu)
 	/* must set new MTU before calling down or up */
 	netdev->mtu = new_mtu;
 
-	msg[0] = IXGBE_VF_SET_LPE;
-	msg[1] = max_frame;
-	hw->mbx.ops.write_posted(hw, msg, 2, 0);
-
+	if (!netif_running(netdev)) {
+		msg[0] = IXGBE_VF_SET_LPE;
+		msg[1] = max_frame;
+		hw->mbx.ops.write_posted(hw, msg, 2, 0);
+	}
 	if (netif_running(netdev))
 		ixgbevf_reinit_locked(adapter);
 
