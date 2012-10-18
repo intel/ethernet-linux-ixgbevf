@@ -31,9 +31,6 @@
 #include "ixgbevf_osdep.h"
 
 
-/* Vendor ID */
-#define IXGBE_INTEL_VENDOR_ID			0x8086
-
 /* Device IDs */
 #define IXGBE_DEV_ID_82598AF_DUAL_PORT		0x10C6
 #define IXGBE_DEV_ID_82598AF_SINGLE_PORT	0x10C7
@@ -48,7 +45,9 @@
 #define IXGBE_DEV_ID_82599_CX4			0x10F9
 #define IXGBE_DEV_ID_82599_SFP			0x10FB
 #define IXGBE_SUBDEV_ID_82599_SFP		0x11A9
+#define IXGBE_SUBDEV_ID_82599_RNDC		0x1F72
 #define IXGBE_SUBDEV_ID_82599_560FLR		0x17D0
+#define IXGBE_SUBDEV_ID_82599_ECNA_DP		0x0470
 #define IXGBE_DEV_ID_82599_BACKPLANE_FCOE	0x152A
 #define IXGBE_DEV_ID_82599_SFP_FCOE		0x1529
 #define IXGBE_DEV_ID_82599_SFP_EM		0x1507
@@ -807,6 +806,7 @@
 #define IXGBE_GCR_EXT_VT_MODE_64	0x00000003
 #define IXGBE_GCR_EXT_SRIOV		(IXGBE_GCR_EXT_MSIX_EN | \
 					 IXGBE_GCR_EXT_VT_MODE_64)
+#define IXGBE_GCR_EXT_VT_MODE_MASK	0x00000003
 /* Time Sync Registers */
 #define IXGBE_TSYNCRXCTL	0x05188 /* Rx Time Sync Control register - RW */
 #define IXGBE_TSYNCTXCTL	0x08C00 /* Tx Time Sync Control register - RW */
@@ -827,6 +827,8 @@
 #define IXGBE_TRGTTIMH0	0x08C28 /* Target Time Register 0 High - RW */
 #define IXGBE_TRGTTIML1	0x08C2C /* Target Time Register 1 Low - RW */
 #define IXGBE_TRGTTIMH1	0x08C30 /* Target Time Register 1 High - RW */
+#define IXGBE_CLKTIML	0x08C34 /* Clock Out Time Register Low - RW */
+#define IXGBE_CLKTIMH	0x08C38 /* Clock Out Time Register High - RW */
 #define IXGBE_FREQOUT0	0x08C34 /* Frequency Out 0 Control register - RW */
 #define IXGBE_FREQOUT1	0x08C38 /* Frequency Out 1 Control register - RW */
 #define IXGBE_AUXSTMPL0	0x08C3C /* Auxiliary Time Stamp 0 register Low - RO */
@@ -982,6 +984,7 @@
 #define IXGBE_RSCCTL_MAXDESC_4	0x04
 #define IXGBE_RSCCTL_MAXDESC_8	0x08
 #define IXGBE_RSCCTL_MAXDESC_16	0x0C
+#define IXGBE_RSCCTL_TS_DIS	0x02
 
 /* RSCDBU Bit Masks */
 #define IXGBE_RSCDBU_RSCSMALDIS_MASK	0x0000007F
@@ -994,7 +997,7 @@
 #define IXGBE_RDRXCTL_DMAIDONE		0x00000008 /* DMA init cycle done */
 #define IXGBE_RDRXCTL_AGGDIS		0x00010000 /* Aggregation disable */
 #define IXGBE_RDRXCTL_RSCFRSTSIZE	0x003E0000 /* RSC First packet size */
-#define IXGBE_RDRXCTL_RSCLLIDIS		0x00800000 /* Disabl RSC compl on LLI */
+#define IXGBE_RDRXCTL_RSCLLIDIS		0x00800000 /* Disable RSC compl on LLI*/
 #define IXGBE_RDRXCTL_RSCACKC		0x02000000 /* must set 1 when RSC ena */
 #define IXGBE_RDRXCTL_FCOE_WRFIX	0x04000000 /* must set 1 when RSC ena */
 
@@ -1359,6 +1362,7 @@ enum {
 #define IXGBE_EICR_LINKSEC	0x00200000 /* PN Threshold */
 #define IXGBE_EICR_MNG		0x00400000 /* Manageability Event Interrupt */
 #define IXGBE_EICR_TS		0x00800000 /* Thermal Sensor Event */
+#define IXGBE_EICR_TIMESYNC	0x01000000 /* Timesync Event */
 #define IXGBE_EICR_GPI_SDP0	0x01000000 /* Gen Purpose Interrupt on SDP0 */
 #define IXGBE_EICR_GPI_SDP1	0x02000000 /* Gen Purpose Interrupt on SDP1 */
 #define IXGBE_EICR_GPI_SDP2	0x04000000 /* Gen Purpose Interrupt on SDP2 */
@@ -1376,6 +1380,7 @@ enum {
 #define IXGBE_EICS_MAILBOX	IXGBE_EICR_MAILBOX   /* VF to PF Mailbox Int */
 #define IXGBE_EICS_LSC		IXGBE_EICR_LSC /* Link Status Change */
 #define IXGBE_EICS_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
+#define IXGBE_EICS_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
 #define IXGBE_EICS_GPI_SDP0	IXGBE_EICR_GPI_SDP0 /* SDP0 Gen Purpose Int */
 #define IXGBE_EICS_GPI_SDP1	IXGBE_EICR_GPI_SDP1 /* SDP1 Gen Purpose Int */
 #define IXGBE_EICS_GPI_SDP2	IXGBE_EICR_GPI_SDP2 /* SDP2 Gen Purpose Int */
@@ -1394,6 +1399,7 @@ enum {
 #define IXGBE_EIMS_LSC		IXGBE_EICR_LSC /* Link Status Change */
 #define IXGBE_EIMS_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
 #define IXGBE_EIMS_TS		IXGBE_EICR_TS /* Thermal Sensor Event */
+#define IXGBE_EIMS_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
 #define IXGBE_EIMS_GPI_SDP0	IXGBE_EICR_GPI_SDP0 /* SDP0 Gen Purpose Int */
 #define IXGBE_EIMS_GPI_SDP1	IXGBE_EICR_GPI_SDP1 /* SDP1 Gen Purpose Int */
 #define IXGBE_EIMS_GPI_SDP2	IXGBE_EICR_GPI_SDP2 /* SDP2 Gen Purpose Int */
@@ -1411,6 +1417,7 @@ enum {
 #define IXGBE_EIMC_MAILBOX	IXGBE_EICR_MAILBOX /* VF to PF Mailbox Int */
 #define IXGBE_EIMC_LSC		IXGBE_EICR_LSC /* Link Status Change */
 #define IXGBE_EIMC_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
+#define IXGBE_EIMC_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
 #define IXGBE_EIMC_GPI_SDP0	IXGBE_EICR_GPI_SDP0 /* SDP0 Gen Purpose Int */
 #define IXGBE_EIMC_GPI_SDP1	IXGBE_EICR_GPI_SDP1 /* SDP1 Gen Purpose Int */
 #define IXGBE_EIMC_GPI_SDP2	IXGBE_EICR_GPI_SDP2  /* SDP2 Gen Purpose Int */
@@ -1496,6 +1503,7 @@ enum {
 #define IXGBE_ETQF_1588			0x40000000 /* bit 30 */
 #define IXGBE_ETQF_FILTER_EN		0x80000000 /* bit 31 */
 #define IXGBE_ETQF_POOL_ENABLE		(1 << 26) /* bit 26 */
+#define IXGBE_ETQF_POOL_SHIFT		20
 
 #define IXGBE_ETQS_RX_QUEUE		0x007F0000 /* bits 22:16 */
 #define IXGBE_ETQS_RX_QUEUE_SHIFT	16
@@ -1550,10 +1558,15 @@ enum {
 #define IXGBE_ESDP_SDP4		0x00000010 /* SDP4 Data Value */
 #define IXGBE_ESDP_SDP5		0x00000020 /* SDP5 Data Value */
 #define IXGBE_ESDP_SDP6		0x00000040 /* SDP6 Data Value */
+#define IXGBE_ESDP_SDP7		0x00000080 /* SDP7 Data Value */
 #define IXGBE_ESDP_SDP0_DIR	0x00000100 /* SDP0 IO direction */
 #define IXGBE_ESDP_SDP1_DIR	0x00000200 /* SDP1 IO direction */
+#define IXGBE_ESDP_SDP2_DIR	0x00000400 /* SDP1 IO direction */
+#define IXGBE_ESDP_SDP3_DIR	0x00000800 /* SDP3 IO direction */
 #define IXGBE_ESDP_SDP4_DIR	0x00001000 /* SDP4 IO direction */
 #define IXGBE_ESDP_SDP5_DIR	0x00002000 /* SDP5 IO direction */
+#define IXGBE_ESDP_SDP6_DIR	0x00004000 /* SDP6 IO direction */
+#define IXGBE_ESDP_SDP7_DIR	0x00008000 /* SDP7 IO direction */
 #define IXGBE_ESDP_SDP0_NATIVE	0x00010000 /* SDP0 IO mode */
 #define IXGBE_ESDP_SDP1_NATIVE	0x00020000 /* SDP1 IO mode */
 
@@ -1918,6 +1931,10 @@ enum {
 #define IXGBE_RXDCTL_RLPMLMASK		0x00003FFF /* X540 supported only */
 #define IXGBE_RXDCTL_RLPML_EN		0x00008000
 #define IXGBE_RXDCTL_VME		0x40000000 /* VLAN mode enable */
+
+#define IXGBE_TSAUXC_EN_CLK		0x00000004
+#define IXGBE_TSAUXC_SYNCLK		0x00000008
+#define IXGBE_TSAUXC_SDP0_INT		0x00000040
 
 #define IXGBE_TSYNCTXCTL_VALID		0x00000001 /* Tx timestamp valid */
 #define IXGBE_TSYNCTXCTL_ENABLED	0x00000010 /* Tx timestamping enabled */
@@ -2701,8 +2718,10 @@ enum ixgbe_sfp_type {
 	ixgbe_sfp_type_srlr_core1 = 6,
 	ixgbe_sfp_type_da_act_lmt_core0 = 7,
 	ixgbe_sfp_type_da_act_lmt_core1 = 8,
-	ixgbe_sfp_type_1g_core0 = 9,
-	ixgbe_sfp_type_1g_core1 = 10,
+	ixgbe_sfp_type_1g_cu_core0 = 9,
+	ixgbe_sfp_type_1g_cu_core1 = 10,
+	ixgbe_sfp_type_1g_sx_core0 = 11,
+	ixgbe_sfp_type_1g_sx_core1 = 12,
 	ixgbe_sfp_type_not_present = 0xFFFE,
 	ixgbe_sfp_type_unknown = 0xFFFF
 };

@@ -32,6 +32,9 @@
 #define IXGBE_VF_MAX_TX_QUEUES	8
 #define IXGBE_VF_MAX_RX_QUEUES	8
 
+/* DCB define */
+#define IXGBE_VF_MAX_TRAFFIC_CLASS	8
+
 #define IXGBE_VFCTRL		0x00000
 #define IXGBE_VFSTATUS		0x00008
 #define IXGBE_VFLINKS		0x00010
@@ -169,6 +172,8 @@ struct ixgbe_hw {
 
 	u8  revision_id;
 	bool adapter_stopped;
+
+	int api_version;
 };
 
 struct ixgbevf_hw_stats {
@@ -215,5 +220,9 @@ s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 				 u32 mc_addr_count, ixgbe_mc_addr_itr,
 				 bool clear);
 s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind, bool vlan_on);
+void ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size);
+int ixgbevf_negotiate_api_version(struct ixgbe_hw *hw, int api);
+int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
+		       unsigned int *default_tc);
 
 #endif /* __IXGBE_VF_H__ */

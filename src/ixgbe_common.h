@@ -125,4 +125,7 @@ void ixgbe_enable_relaxed_ordering_gen2(struct ixgbe_hw *hw);
 s32 ixgbe_set_fw_drv_ver_generic(struct ixgbe_hw *hw, u8 maj, u8 min,
 				 u8 build, u8 ver);
 void ixgbe_clear_tx_pending(struct ixgbe_hw *hw);
+
+extern s32 ixgbe_reset_pipeline_82599(struct ixgbe_hw *hw);
+
 #endif /* IXGBE_COMMON */
