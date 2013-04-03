@@ -28,7 +28,6 @@
 #ifndef _IXGBEVF_H_
 #define _IXGBEVF_H_
 
-
 #include <linux/pci.h>
 #include <linux/netdevice.h>
 #include <linux/vmalloc.h>
@@ -111,9 +110,7 @@ struct ixgbevf_ring {
 #define IXGBEVF_RXBUFFER_256   256    /* Used for packet split */
 #define IXGBEVF_RXBUFFER_3K    3072
 #define IXGBEVF_RXBUFFER_7K    7168
-#define IXGBEVF_RXBUFFER_15K   15360
-#define IXGBEVF_MAX_RXBUFFER   16384  /* largest size for single descriptor */
-
+#define IXGBEVF_RXBUFFER_10K   10240
 #define IXGBEVF_RX_HDR_SIZE IXGBEVF_RXBUFFER_256
 
 #define MAXIMUM_ETHERNET_VLAN_SIZE (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN)
@@ -243,6 +240,7 @@ struct ixgbevf_adapter {
 	u32 flags;
 #define IXGBE_FLAG_RX_CSUM_ENABLED              (u32)(1)
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1 << 1)
+#define IXGBE_FLAG_IN_NETPOLL                   (u32)(1 << 2)
 
 	/* OS defined structs */
 	struct net_device *netdev;

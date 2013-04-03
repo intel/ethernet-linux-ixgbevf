@@ -79,6 +79,7 @@ endif
 VSP :=  $(KOBJ)/include/generated/utsrelease.h \
         $(KOBJ)/include/linux/utsrelease.h \
         $(KOBJ)/include/linux/version.h \
+        $(KOBJ)/include/generated/uapi/linux/version.h \
         /boot/vmlinuz.version.h
 
 # Config file Search Path

@@ -96,7 +96,7 @@ struct ixgbe_mac_operations {
 	s32 (*get_bus_info)(struct ixgbe_hw *);
 
 	/* Link */
-	s32 (*setup_link)(struct ixgbe_hw *, ixgbe_link_speed, bool, bool);
+	s32 (*setup_link)(struct ixgbe_hw *, ixgbe_link_speed, bool);
 	s32 (*check_link)(struct ixgbe_hw *, ixgbe_link_speed *, bool *, bool);
 	s32 (*get_link_capabilities)(struct ixgbe_hw *, ixgbe_link_speed *,
 				     bool *);
@@ -210,7 +210,7 @@ u32 ixgbe_get_num_of_tx_queues_vf(struct ixgbe_hw *hw);
 u32 ixgbe_get_num_of_rx_queues_vf(struct ixgbe_hw *hw);
 s32 ixgbe_get_mac_addr_vf(struct ixgbe_hw *hw, u8 *mac_addr);
 s32 ixgbe_setup_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed speed,
-			    bool autoneg, bool autoneg_wait_to_complete);
+			    bool autoneg_wait_to_complete);
 s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 			    bool *link_up, bool autoneg_wait_to_complete);
 s32 ixgbe_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr, u32 vmdq,

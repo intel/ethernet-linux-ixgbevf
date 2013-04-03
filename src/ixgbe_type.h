@@ -31,6 +31,9 @@
 #include "ixgbevf_osdep.h"
 
 
+/* Vendor ID */
+#define IXGBE_INTEL_VENDOR_ID			0x8086
+
 /* Device IDs */
 #define IXGBE_DEV_ID_82598AF_DUAL_PORT		0x10C6
 #define IXGBE_DEV_ID_82598AF_SINGLE_PORT	0x10C7
@@ -48,14 +51,20 @@
 #define IXGBE_SUBDEV_ID_82599_RNDC		0x1F72
 #define IXGBE_SUBDEV_ID_82599_560FLR		0x17D0
 #define IXGBE_SUBDEV_ID_82599_ECNA_DP		0x0470
+#define IXGBE_SUBDEV_ID_82599_SP_560FLR		0x211B
+#define IXGBE_SUBDEV_ID_82599_LOM_SFP		0x8976
 #define IXGBE_DEV_ID_82599_BACKPLANE_FCOE	0x152A
 #define IXGBE_DEV_ID_82599_SFP_FCOE		0x1529
 #define IXGBE_DEV_ID_82599_SFP_EM		0x1507
+#define IXGBE_DEV_ID_82599_SFP_SF2		0x154D
+#define IXGBE_DEV_ID_82599EN_SFP		0x1557
 #define IXGBE_DEV_ID_82599_XAUI_LOM		0x10FC
 #define IXGBE_DEV_ID_82599_T3_LOM		0x151C
 #define IXGBE_DEV_ID_82599_VF			0x10ED
-#define IXGBE_DEV_ID_X540_VF			0x1515
+#define IXGBE_DEV_ID_82599_VF_HV		0x152E
 #define IXGBE_DEV_ID_X540T			0x1528
+#define IXGBE_DEV_ID_X540_VF			0x1515
+#define IXGBE_DEV_ID_X540_VF_HV			0x1530
 
 /* General Registers */
 #define IXGBE_CTRL		0x00000
@@ -191,12 +200,12 @@
 				 (((_i) < 64) ? (0x0100C + ((_i) * 0x40)) : \
 				 (0x0D00C + (((_i) - 64) * 0x40))))
 #define IXGBE_RDRXCTL		0x02F00
-#define IXGBE_RDRXCTL_RSC_PUSH	0x80
 /* 8 of these 0x03C00 - 0x03C1C */
 #define IXGBE_RXPBSIZE(_i)	(0x03C00 + ((_i) * 4))
 #define IXGBE_RXCTRL		0x03000
 #define IXGBE_DROPEN		0x03D04
 #define IXGBE_RXPBSIZE_SHIFT	10
+#define IXGBE_RXPBSIZE_MASK	0x000FFC00
 
 /* Receive Registers */
 #define IXGBE_RXCSUM		0x05000
@@ -261,6 +270,7 @@
 #define IXGBE_VMD_CTL		0x0581C
 #define IXGBE_RETA(_i)		(0x05C00 + ((_i) * 4))  /* 32 of these (0-31) */
 #define IXGBE_RSSRK(_i)		(0x05C80 + ((_i) * 4))  /* 10 of these (0-9) */
+
 
 /* Flow Director registers */
 #define IXGBE_FDIRCTRL	0x0EE00
@@ -342,11 +352,16 @@
 
 #define IXGBE_WUPL	0x05900
 #define IXGBE_WUPM	0x05A00 /* wake up pkt memory 0x5A00-0x5A7C */
+
 #define IXGBE_FHFT(_n)	(0x09000 + (_n * 0x100)) /* Flex host filter table */
 /* Ext Flexible Host Filter Table */
 #define IXGBE_FHFT_EXT(_n)	(0x09800 + (_n * 0x100))
 
+/* Four Flexible Filters are supported */
 #define IXGBE_FLEXIBLE_FILTER_COUNT_MAX		4
+
+/* Six Flexible Filters are supported */
+#define IXGBE_FLEXIBLE_FILTER_COUNT_MAX_6	6
 #define IXGBE_EXT_FLEXIBLE_FILTER_COUNT_MAX	2
 
 /* Each Flexible Filter is at most 128 (0x80) bytes in length */
@@ -378,10 +393,11 @@
 #define IXGBE_WUFC_FLX3	0x00080000 /* Flexible Filter 3 Enable */
 #define IXGBE_WUFC_FLX4	0x00100000 /* Flexible Filter 4 Enable */
 #define IXGBE_WUFC_FLX5	0x00200000 /* Flexible Filter 5 Enable */
-#define IXGBE_WUFC_FLX_FILTERS	0x000F0000 /* Mask for 4 flex filters */
+#define IXGBE_WUFC_FLX_FILTERS		0x000F0000 /* Mask for 4 flex filters */
 /* Mask for Ext. flex filters */
 #define IXGBE_WUFC_EXT_FLX_FILTERS	0x00300000
-#define IXGBE_WUFC_ALL_FILTERS	0x003F00FF /* Mask for all wakeup filters */
+#define IXGBE_WUFC_ALL_FILTERS		0x000F00FF /* Mask all 4 flex filters */
+#define IXGBE_WUFC_ALL_FILTERS_6	0x003F00FF /* Mask all 6 flex filters */
 #define IXGBE_WUFC_FLX_OFFSET	16 /* Offset to the Flexible Filters bits */
 
 /* Wake Up Status */
@@ -402,7 +418,6 @@
 #define IXGBE_WUS_FLX5		IXGBE_WUFC_FLX5
 #define IXGBE_WUS_FLX_FILTERS	IXGBE_WUFC_FLX_FILTERS
 
-/* Wake Up Packet Length */
 #define IXGBE_WUPL_LENGTH_MASK	0xFFFF
 
 /* DCB registers */
@@ -417,6 +432,7 @@
 #define IXGBE_TDTQ2TCSR(_i)	(0x0622C + ((_i) * 0x40)) /* 8 of these (0-7) */
 #define IXGBE_TDPT2TCCR(_i)	(0x0CD20 + ((_i) * 4)) /* 8 of these (0-7) */
 #define IXGBE_TDPT2TCSR(_i)	(0x0CD40 + ((_i) * 4)) /* 8 of these (0-7) */
+
 
 
 /* Security Control Registers */
@@ -543,6 +559,7 @@
 #define IXGBE_RTTBCNRC_RF_INT_MASK \
 	(IXGBE_RTTBCNRC_RF_DEC_MASK << IXGBE_RTTBCNRC_RF_INT_SHIFT)
 #define IXGBE_RTTBCNRM	0x04980
+
 
 /* FCoE DMA Context Registers */
 #define IXGBE_FCPTRL		0x02410 /* FC User Desc. PTR Low */
@@ -724,11 +741,14 @@
 #define IXGBE_BMCIP_IPADDR_VALID	0x00000002
 
 /* Management Bit Fields and Masks */
+#define IXGBE_MANC_RCV_TCO_EN	0x00020000 /* Rcv TCO packet enable */
 #define IXGBE_MANC_EN_BMC2OS	0x10000000 /* Ena BMC2OS and OS2BMC traffic */
 #define IXGBE_MANC_EN_BMC2OS_SHIFT	28
 
 /* Firmware Semaphore Register */
 #define IXGBE_FWSM_MODE_MASK	0xE
+#define IXGBE_FWSM_TS_ENABLED	0x1
+#define IXGBE_FWSM_FW_MODE_PT	0x4
 
 /* ARC Subsystem registers */
 #define IXGBE_HICR		0x15F00
@@ -994,7 +1014,9 @@
 #define IXGBE_RDRXCTL_RDMTS_1_2		0x00000000 /* Rx Desc Min THLD Size */
 #define IXGBE_RDRXCTL_CRCSTRIP		0x00000002 /* CRC Strip */
 #define IXGBE_RDRXCTL_MVMEN		0x00000020
+#define IXGBE_RDRXCTL_RSC_PUSH_DIS	0x00000020
 #define IXGBE_RDRXCTL_DMAIDONE		0x00000008 /* DMA init cycle done */
+#define IXGBE_RDRXCTL_RSC_PUSH		0x00000080
 #define IXGBE_RDRXCTL_AGGDIS		0x00010000 /* Aggregation disable */
 #define IXGBE_RDRXCTL_RSCFRSTSIZE	0x003E0000 /* RSC First packet size */
 #define IXGBE_RDRXCTL_RSCLLIDIS		0x00800000 /* Disable RSC compl on LLI*/
@@ -1023,6 +1045,7 @@
 #define IXGBE_CTRL_RST_MASK	(IXGBE_CTRL_LNK_RST | IXGBE_CTRL_RST)
 
 /* FACTPS */
+#define IXGBE_FACTPS_MNGCG	0x20000000 /* Manageblility Clock Gated */
 #define IXGBE_FACTPS_LFS	0x40000000 /* LAN Function Select */
 
 /* MHADD Bit Masks */
@@ -1640,6 +1663,7 @@ enum {
 #define IXGBE_AUTOC2_10G_KR	(0x0 << IXGBE_AUTOC2_10G_SERIAL_PMA_PMD_SHIFT)
 #define IXGBE_AUTOC2_10G_XFI	(0x1 << IXGBE_AUTOC2_10G_SERIAL_PMA_PMD_SHIFT)
 #define IXGBE_AUTOC2_10G_SFI	(0x2 << IXGBE_AUTOC2_10G_SERIAL_PMA_PMD_SHIFT)
+#define IXGBE_AUTOC2_LINK_DISABLE_MASK	0x70000000
 
 #define IXGBE_MACC_FLU		0x00000001
 #define IXGBE_MACC_FSV_10G	0x00030000
@@ -1810,7 +1834,7 @@ enum {
 #define IXGBE_ETH_LENGTH_OF_ADDRESS	6
 
 #define IXGBE_EEPROM_PAGE_SIZE_MAX	128
-#define IXGBE_EEPROM_RD_BUFFER_MAX_COUNT	512 /* words rd in burst */
+#define IXGBE_EEPROM_RD_BUFFER_MAX_COUNT	256 /* words rd in burst */
 #define IXGBE_EEPROM_WR_BUFFER_MAX_COUNT	256 /* words wr in burst */
 
 #ifndef IXGBE_EEPROM_GRANT_ATTEMPTS
@@ -1873,6 +1897,17 @@ enum {
 #define IXGBE_PCI_HEADER_TYPE_REGISTER	0x0E
 #define IXGBE_PCI_HEADER_TYPE_MULTIFUNC	0x80
 #define IXGBE_PCI_DEVICE_CONTROL2_16ms	0x0005
+
+#define IXGBE_PCIDEVCTRL2_TIMEO_MASK	0xf
+#define IXGBE_PCIDEVCTRL2_16_32ms_def	0x0
+#define IXGBE_PCIDEVCTRL2_50_100us	0x1
+#define IXGBE_PCIDEVCTRL2_1_2ms		0x2
+#define IXGBE_PCIDEVCTRL2_16_32ms	0x5
+#define IXGBE_PCIDEVCTRL2_65_130ms	0x6
+#define IXGBE_PCIDEVCTRL2_260_520ms	0x9
+#define IXGBE_PCIDEVCTRL2_1_2s		0xa
+#define IXGBE_PCIDEVCTRL2_4_8s		0xd
+#define IXGBE_PCIDEVCTRL2_17_34s	0xe
 
 /* Number of 100 microseconds we wait for PCI Express master disable */
 #define IXGBE_PCI_MASTER_DISABLE_TIMEOUT	800
@@ -2303,6 +2338,14 @@ enum ixgbe_fdir_pballoc_type {
 #define IXGBE_FDIR_DROP_QUEUE			127
 
 #define IXGBE_STATUS_OVERHEATING_BIT		20 /* STATUS overtemp bit num */
+/* iTS sensor related defines*/
+#define IXGBE_TEMP_STATUS_ADDR_X540		0xC830
+#define IXGBE_TEMP_VALUE_ADDR_X540		0xC820
+#define IXGBE_TEMP_PROV_2_ADDR_X540		0xC421
+#define IXGBE_TEMP_PROV_4_ADDR_X540		0xC423
+#define IXGBE_TEMP_STATUS_PAGE_X540		0x1E
+#define IXGBE_TEMP_HIGH_FAILURE_BIT_X540	0xE
+#define IXGBE_TEMP_HIGH_WARNING_BIT_X540	0xC
 
 /* Manageablility Host Interface defines */
 #define IXGBE_HI_MAX_BLOCK_BYTE_LENGTH	1792 /* Num of bytes in range */
@@ -2495,7 +2538,6 @@ typedef u32 ixgbe_link_speed;
 #define IXGBE_LINK_SPEED_82599_AUTONEG	(IXGBE_LINK_SPEED_100_FULL | \
 					 IXGBE_LINK_SPEED_1GB_FULL | \
 					 IXGBE_LINK_SPEED_10GB_FULL)
-
 
 /* Physical layer type */
 typedef u32 ixgbe_physical_layer;
@@ -2952,9 +2994,10 @@ struct ixgbe_eeprom_operations {
 #define IXGBE_ERR_INVALID_ARGUMENT		-32
 #define IXGBE_ERR_HOST_INTERFACE_COMMAND	-33
 #define IXGBE_ERR_OUT_OF_MEM			-34
+#define IXGBE_ERR_FEATURE_NOT_SUPPORTED		-36
+#define IXGBE_ERR_EEPROM_PROTECTED_REGION	-37
 
 #define IXGBE_NOT_IMPLEMENTED			0x7FFFFFFF
 
 #define UNREFERENCED_XPARAMETER
-
 #endif /* _IXGBE_TYPE_H_ */

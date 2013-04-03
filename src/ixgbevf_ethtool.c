@@ -107,6 +107,7 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 	ecmd->port = -1;
 
 	if (!in_interrupt()) {
+		hw->mac.get_link_status = 1;
 		hw->mac.ops.check_link(hw, &link_speed, &link_up, false);
 	} else {
 		/*
