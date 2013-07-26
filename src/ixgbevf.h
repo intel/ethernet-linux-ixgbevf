@@ -241,6 +241,7 @@ struct ixgbevf_adapter {
 #define IXGBE_FLAG_RX_CSUM_ENABLED              (u32)(1)
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1 << 1)
 #define IXGBE_FLAG_IN_NETPOLL                   (u32)(1 << 2)
+#define IXGBEVF_FLAG_QUEUE_RESET_REQUESTED      (u32)(1 << 3)
 
 	/* OS defined structs */
 	struct net_device *netdev;
