@@ -2345,6 +2345,9 @@ extern void _kc_pci_disable_link_state(struct pci_dev *dev, int state);
 #else /* < 2.6.26 */
 #include <linux/pci-aspm.h>
 #define HAVE_NETDEV_VLAN_FEATURES
+#ifndef PCI_EXP_LNKCAP_ASPMS
+#define PCI_EXP_LNKCAP_ASPMS 0x00000c00 /* ASPM Support */
+#endif /* PCI_EXP_LNKCAP_ASPMS */
 #endif /* < 2.6.26 */
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27) )
@@ -2460,11 +2463,13 @@ extern void __kc_warn_slowpath(const char *file, const int line,
 })
 #endif /* WARN */
 #undef HAVE_IXGBE_DEBUG_FS
+#undef HAVE_IGB_DEBUG_FS
 #else /* < 2.6.27 */
 #define HAVE_TX_MQ
 #define HAVE_NETDEV_SELECT_QUEUE
 #ifdef CONFIG_DEBUG_FS
 #define HAVE_IXGBE_DEBUG_FS
+#define HAVE_IGB_DEBUG_FS
 #endif /* CONFIG_DEBUG_FS */
 #endif /* < 2.6.27 */
 
@@ -2513,6 +2518,9 @@ extern void _kc_pci_clear_master(struct pci_dev *dev);
 #define pci_clear_master(dev)	_kc_pci_clear_master(dev)
 #endif
 
+#ifndef PCI_EXP_LNKCTL_ASPMC
+#define  PCI_EXP_LNKCTL_ASPMC	0x0003	/* ASPM Control */
+#endif
 #else /* < 2.6.29 */
 #ifndef HAVE_NET_DEVICE_OPS
 #define HAVE_NET_DEVICE_OPS
@@ -3071,6 +3079,10 @@ do {								\
 #define u64_stats_fetch_retry_bh(a) (0)
 #define u64_stats_fetch_begin_bh(a) (0)
 
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,1))
+#define HAVE_8021P_SUPPORT
+#endif
+
 #else /* < 2.6.36 */
 
 
@@ -3482,6 +3494,19 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
 
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) )
+#ifndef ADVERTISED_40000baseKR4_Full
+/* these defines were all added in one commit, so should be safe
+ * to trigger activiation on one define
+ */
+#define SUPPORTED_40000baseKR4_Full	(1 << 23)
+#define SUPPORTED_40000baseCR4_Full	(1 << 24)
+#define SUPPORTED_40000baseSR4_Full	(1 << 25)
+#define SUPPORTED_40000baseLR4_Full	(1 << 26)
+#define ADVERTISED_40000baseKR4_Full	(1 << 23)
+#define ADVERTISED_40000baseCR4_Full	(1 << 24)
+#define ADVERTISED_40000baseSR4_Full	(1 << 25)
+#define ADVERTISED_40000baseLR4_Full	(1 << 26)
+#endif
 /**
  * mmd_eee_cap_to_ethtool_sup_t
  * @eee_cap: value of the MMD EEE Capability register
@@ -3716,12 +3741,7 @@ static inline int __kc_pci_vfs_assigned(struct pci_dev *dev)
 }
 #endif
 #define pci_vfs_assigned(dev) __kc_pci_vfs_assigned(dev)
-#else /* >= 3.10.0 */
-#define HAVE_ENCAP_TSO_OFFLOAD
-#endif /* >= 3.10.0 */
 
-/*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0) )
 #ifndef VLAN_TX_COOKIE_MAGIC
 static inline struct sk_buff *__kc__vlan_hwaccel_put_tag(struct sk_buff *skb,
 							 u16 vlan_tci)
@@ -3735,6 +3755,9 @@ static inline struct sk_buff *__kc__vlan_hwaccel_put_tag(struct sk_buff *skb,
 #define __vlan_hwaccel_put_tag(skb, vlan_proto, vlan_tci) \
 	__kc__vlan_hwaccel_put_tag(skb, vlan_tci)
 #endif
-#endif /* < 3.11.0 */
+
+#else /* >= 3.10.0 */
+#define HAVE_ENCAP_TSO_OFFLOAD
+#endif /* >= 3.10.0 */
 
 #endif /* _KCOMPAT_H_ */

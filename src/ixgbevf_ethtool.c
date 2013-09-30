@@ -50,16 +50,27 @@
 #ifdef ETHTOOL_GSTATS
 struct ixgbe_stats {
 	char stat_string[ETH_GSTRING_LEN];
-	int sizeof_stat;
-	int stat_offset;
-	int base_stat_offset;
-	int saved_reset_offset;
+	struct {
+		int sizeof_stat;
+		int stat_offset;
+		int base_stat_offset;
+		int saved_reset_offset;
+	};
 };
 
-#define IXGBEVF_STAT(m, b, r) sizeof(((struct ixgbevf_adapter *)0)->m),	\
-		offsetof(struct ixgbevf_adapter, m),			\
-		offsetof(struct ixgbevf_adapter, b),			\
-		offsetof(struct ixgbevf_adapter, r)
+#define IXGBEVF_STAT(m, b, r) { \
+	.sizeof_stat = FIELD_SIZEOF(struct ixgbevf_adapter, m), \
+	.stat_offset = offsetof(struct ixgbevf_adapter, m), \
+	.base_stat_offset = offsetof(struct ixgbevf_adapter, b), \
+	.saved_reset_offset = offsetof(struct ixgbevf_adapter, r) \
+}
+
+#define IXGBEVF_ZSTAT(m) { \
+	.sizeof_stat = FIELD_SIZEOF(struct ixgbevf_adapter, m), \
+	.stat_offset = offsetof(struct ixgbevf_adapter, m), \
+	.base_stat_offset = -1, \
+	.saved_reset_offset = -1 \
+}
 static struct ixgbe_stats ixgbe_gstrings_stats[] = {
 	{"rx_packets",
 	 IXGBEVF_STAT(stats.vfgprc, stats.base_vfgprc, stats.saved_reset_vfgprc)},
@@ -69,15 +80,12 @@ static struct ixgbe_stats ixgbe_gstrings_stats[] = {
 	 IXGBEVF_STAT(stats.vfgorc, stats.base_vfgorc, stats.saved_reset_vfgorc)},
 	{"tx_bytes",
 	 IXGBEVF_STAT(stats.vfgotc, stats.base_vfgotc, stats.saved_reset_vfgotc)},
-	{"tx_busy",IXGBEVF_STAT(tx_busy, zero_base, zero_base)},
+	{"tx_busy", IXGBEVF_ZSTAT(tx_busy)},
 	{"multicast",
 	 IXGBEVF_STAT(stats.vfmprc, stats.base_vfmprc, stats.saved_reset_vfmprc)},
-	{"rx_csum_offload_good",
-	 IXGBEVF_STAT(hw_csum_rx_good, zero_base, zero_base)},
-	{"rx_csum_offload_errors",
-	 IXGBEVF_STAT(hw_csum_rx_error, zero_base, zero_base)},
-	{"tx_csum_offload_ctxt",
-	 IXGBEVF_STAT(hw_csum_tx_good, zero_base, zero_base)},
+	{"rx_csum_offload_good", IXGBEVF_ZSTAT(hw_csum_rx_good)},
+	{"rx_csum_offload_errors", IXGBEVF_ZSTAT(hw_csum_rx_error)},
+	{"tx_csum_offload_ctxt", IXGBEVF_ZSTAT(hw_csum_tx_good)},
 };
 
 #define IXGBE_QUEUE_STATS_LEN 0
@@ -271,8 +279,10 @@ static void ixgbevf_get_regs(struct net_device *netdev, struct ethtool_regs *reg
 
 	regs->version = (1 << 24) | hw->revision_id << 16 | hw->device_id;
 
+	/* IXGBE_VFCTRL is a Write Only register, so just return 0 */
+	regs_buff[0] = 0x0;
+
 	/* General Registers */
-	regs_buff[0] = IXGBE_READ_REG(hw, IXGBE_VFCTRL);
 	regs_buff[1] = IXGBE_READ_REG(hw, IXGBE_VFSTATUS);
 	regs_buff[2] = IXGBE_READ_REG(hw, IXGBE_VFLINKS);
 	regs_buff[3] = IXGBE_READ_REG(hw, IXGBE_VFRXMEMWRAP);
@@ -516,19 +526,26 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 				      struct ethtool_stats *stats, u64 *data)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	char *base = (char *) adapter;
 	int i;
 
 	ixgbevf_update_stats(adapter);
 	for (i = 0; i < IXGBE_GLOBAL_STATS_LEN; i++) {
-		char *p = (char *)adapter + ixgbe_gstrings_stats[i].stat_offset;
-		char *b = (char *)adapter + ixgbe_gstrings_stats[i].base_stat_offset;
-		char *r = (char *)adapter + ixgbe_gstrings_stats[i].saved_reset_offset;
-		data[i] = ((ixgbe_gstrings_stats[i].sizeof_stat ==
-			    sizeof(u64)) ? *(u64 *)p : *(u32 *)p) -
-			  ((ixgbe_gstrings_stats[i].sizeof_stat ==
-			    sizeof(u64)) ? *(u64 *)b : *(u32 *)b) +
-			  ((ixgbe_gstrings_stats[i].sizeof_stat ==
-			    sizeof(u64)) ? *(u64 *)r : *(u32 *)r);
+		char *p = base + ixgbe_gstrings_stats[i].stat_offset;
+		char *b = base + ixgbe_gstrings_stats[i].base_stat_offset;
+		char *r = base + ixgbe_gstrings_stats[i].saved_reset_offset;
+
+		if (ixgbe_gstrings_stats[i].sizeof_stat == sizeof(u64)) {
+			if (ixgbe_gstrings_stats[i].base_stat_offset >= 0)
+				data[i] = *(u64 *)p - *(u64 *)b + *(u64 *)r;
+			else
+				data[i] = *(u64 *)p;
+		} else {
+			if (ixgbe_gstrings_stats[i].base_stat_offset >= 0)
+				data[i] = *(u32 *)p - *(u32 *)b + *(u32 *)r;
+			else
+				data[i] = *(u32 *)p;
+		}
 	}
 }
 

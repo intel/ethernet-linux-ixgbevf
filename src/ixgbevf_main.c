@@ -60,7 +60,7 @@ char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] =
 	"Intel(R) 10 Gigabit PCI Express Virtual Function Network Driver";
 
-#define DRV_VERSION "2.10.3"
+#define DRV_VERSION "2.11.3"
 const char ixgbevf_driver_version[] = DRV_VERSION;
 static char ixgbevf_copyright[] = "Copyright (c) 2009-2012 Intel Corporation.";
 
@@ -1479,20 +1479,30 @@ static int ixgbevf_configure_dcb(struct ixgbevf_adapter *adapter)
 	struct ixgbe_hw *hw = &adapter->hw;
 	unsigned int def_q = 0;
 	unsigned int num_tcs = 0;
+#ifdef HAVE_TX_MQ
+	unsigned int num_rx_queues = adapter->num_rx_queues;
+	unsigned int num_tx_queues = adapter->num_tx_queues;
+#else
 	unsigned int num_rx_queues = 1;
+#endif
 	int err;
 
-	spin_lock(&adapter->mbx_lock);
+	spin_lock_bh(&adapter->mbx_lock);
 
 	/* fetch queue configuration from the PF */
 	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
 
-	spin_unlock(&adapter->mbx_lock);
+	spin_unlock_bh(&adapter->mbx_lock);
 
 	if (err)
 		return err;
 
 	if (num_tcs > 1) {
+#ifdef HAVE_TX_MQ
+		/* we need only one Tx queue */
+		num_tx_queues = 1;
+#endif
+
 		/* update default Tx ring register index */
 		adapter->tx_ring[0].reg_idx = def_q;
 
@@ -1501,7 +1511,12 @@ static int ixgbevf_configure_dcb(struct ixgbevf_adapter *adapter)
 	}
 
 	/* if we have a bad config abort request queue reset */
+#ifdef HAVE_TX_MQ
+	if ((adapter->num_rx_queues != num_rx_queues) ||
+	    (adapter->num_tx_queues != num_tx_queues)) {
+#else
 	if (adapter->num_rx_queues != num_rx_queues) {
+#endif
 		/* force mailbox timeout to prevent further messages */
 		hw->mbx.timeout = 0;
 
@@ -1986,19 +2001,35 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 	adapter->num_rx_queues = 1;
 	adapter->num_tx_queues = 1;
 
-	spin_lock(&adapter->mbx_lock);
+	spin_lock_bh(&adapter->mbx_lock);
 
 	/* fetch queue configuration from the PF */
 	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
 
-	spin_unlock(&adapter->mbx_lock);
+	spin_unlock_bh(&adapter->mbx_lock);
 
 	if (err)
 		return;
 
 	/* we need as many queues as traffic classes */
+#ifdef HAVE_TX_MQ
+	if (num_tcs > 1) {
+		adapter->num_rx_queues = num_tcs;
+	} else {
+		u16 rss = min_t(u16, num_online_cpus(), 2);
+
+		switch (hw->api_version) {
+		case ixgbe_mbox_api_11:
+			adapter->num_rx_queues = rss;
+			adapter->num_tx_queues = rss;
+		default:
+			break;
+		}
+	}
+#else
 	if (num_tcs > 1)
 		adapter->num_rx_queues = num_tcs;
+#endif
 }
 
 /**
