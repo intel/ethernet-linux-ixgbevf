@@ -39,6 +39,7 @@ endif
 
 DRIVER_NAME=ixgbevf
 
+
 ###########################################################################
 # Environment tests
 
@@ -207,6 +208,7 @@ endif
 ifeq ($(SMP),1)
   EXTRA_CFLAGS += -D__SMP__
 endif
+
 
 ###########################################################################
 # Kernel Version Specific rules
