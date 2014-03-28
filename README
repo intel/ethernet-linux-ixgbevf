@@ -6,7 +6,7 @@ ixgbevf Linux* Virtual Function (VF) Driver for Intel® Ethernet Network Connecti
 
 ================================================================================
 
-October 8, 2013
+January 30, 2014
 
 ================================================================================
 
@@ -30,7 +30,7 @@ Overview
 --------
 
 
-NOTE: The ixgbevf driver supports 82599- and X540-based virtual function
+NOTE: The ixgbevf driver supports 82599, X540, and X550-based virtual function
 devices that can only be activated on kernels that support SR-IOV. SR-IOV
 requires the correct platform and OS support.
 
@@ -61,8 +61,8 @@ Identifying Your Adapter
 ------------------------
 
 
-The driver in this release is compatible with 82599- and X540-based Intel
-Ethernet Network Connections.
+The driver in this release is compatible with 82599, X540, and X550-based 
+Intel Ethernet Network Connections.
 
 For more information on how to identify your adapter, go to the Adapter &
 Driver ID Guide at:
@@ -339,7 +339,7 @@ Rx Page Allocation Errors
 -------------------------
 
 
-"order:0" errors may occur under stress with kernels 2.6.25 and above. This is
+"order:0" errors may occur under stress with kernels 2.6.25 and newer. This is
 caused by the way the Linux kernel reports this stressed condition.
 
 
