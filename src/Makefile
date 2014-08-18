@@ -80,8 +80,8 @@ VSP :=  $(KOBJ)/include/generated/utsrelease.h \
         /boot/vmlinuz.version.h
 
 # Config file Search Path
-CSP :=  $(KSRC)/include/generated/autoconf.h \
-        $(KSRC)/include/linux/autoconf.h \
+CSP :=  $(KOBJ)/include/generated/autoconf.h \
+        $(KOBJ)/include/linux/autoconf.h \
         /boot/vmlinuz.autoconf.h
 
 # prune the lists down to only files that exist
@@ -307,12 +307,12 @@ install: default $(MANFILE).gz
 	find $(INSTALL_MOD_PATH)/lib/modules/$(KVER) -name $(TARGET).gz -exec rm -f {} \; || true
 	install -D -m 644 $(TARGET) $(INSTALL_MOD_PATH)$(INSTDIR)/$(TARGET)
 ifeq (,$(INSTALL_MOD_PATH))
-	/sbin/depmod -a || true
+	/sbin/depmod -a $(KVER) || true
 else
   ifeq ($(DEPVER),1 )
-	/sbin/depmod -r $(INSTALL_MOD_PATH) -a || true
+	/sbin/depmod -r $(INSTALL_MOD_PATH) -a $(KVER) || true
   else
-	/sbin/depmod -b $(INSTALL_MOD_PATH) -a -n $(KVERSION) > /dev/null || true
+	/sbin/depmod -b $(INSTALL_MOD_PATH) -a -n $(KVER) > /dev/null || true
   endif
 endif
 	install -D -m 644 $(MANFILE).gz $(INSTALL_MOD_PATH)$(MANDIR)/man$(MANSECTION)/$(MANFILE).gz
