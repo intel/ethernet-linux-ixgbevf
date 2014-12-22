@@ -6,14 +6,13 @@ ixgbevf Linux* Virtual Function (VF) Driver for Intel® Ethernet Network Connecti
 
 ================================================================================
 
-January 30, 2014
+November 24, 2014
 
 ================================================================================
 
 
 Contents
 --------
-
 
 - Overview
 - Building and Installation
@@ -30,9 +29,9 @@ Overview
 --------
 
 
-NOTE: The ixgbevf driver supports 82599, X540, and X550-based virtual function
-devices that can only be activated on kernels that support SR-IOV. SR-IOV
-requires the correct platform and OS support.
+The ixgbevf driver supports 82599, X540, X550, and X552-based virtual
+function devices that can only be activated on kernels that support SR-IOV.
+SR-IOV requires the correct platform and OS support.
 
 This file describes the ixgbevf Linux* Virtual Function Driver for the 
 10 Gigabit PCI Express Family of Adapters. The driver supports kernel versions 
@@ -59,10 +58,6 @@ VLANs: There is a limit of a total of 64 shared VLANs to 1 or more VFs.
 
 Identifying Your Adapter
 ------------------------
-
-
-The driver in this release is compatible with 82599, X540, and X550-based 
-Intel Ethernet Network Connections.
 
 For more information on how to identify your adapter, go to the Adapter &
 Driver ID Guide at:
@@ -375,8 +370,8 @@ License
 -------
 
 
-Intel Gigabit Linux driver.
-Copyright(c) 1999 - 2013 Intel Corporation.
+Intel 10 Gigabit Linux driver.
+Copyright(c) 1999 - 2014 Intel Corporation.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms and conditions of the GNU General Public License, version 2, as
