@@ -58,7 +58,7 @@ static const char ixgbevf_driver_string[] =
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(2.16.1) RELEASE_TAG
+#define DRV_VERSION __stringify(2.16.4) RELEASE_TAG
 const char ixgbevf_driver_version[] = DRV_VERSION;
 static char ixgbevf_copyright[] = "Copyright (c) 2009-2014 Intel Corporation.";
 
@@ -3941,8 +3941,8 @@ static int ixgbevf_xmit_frame_ring(struct sk_buff *skb,
 	first->gso_segs = 1;
 
 #if defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX)
-	if (vlan_tx_tag_present(skb)) {
-		tx_flags |= vlan_tx_tag_get(skb);
+	if (skb_vlan_tag_present(skb)) {
+		tx_flags |= skb_vlan_tag_get(skb);
 		tx_flags <<= IXGBE_TX_FLAGS_VLAN_SHIFT;
 		tx_flags |= IXGBE_TX_FLAGS_VLAN;
 	/* else if it is a SW VLAN check the next protocol and store the tag */
@@ -4371,6 +4371,13 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	int i, err, pci_using_dac;
 	const struct ixgbevf_info *ei = ixgbevf_info_tbl[ent->driver_data];
 	bool disable_dev = false;
+#ifdef HAVE_NDO_SET_FEATURES
+#ifndef HAVE_RHEL6_NET_DEVICE_OPS_EXT
+	netdev_features_t hw_features;
+#else
+	u32 hw_features;
+#endif
+#endif /* HAVE_NDO_SET_FEATURES */
 
 	err = pci_enable_device(pdev);
 	if (err)
@@ -4488,11 +4495,25 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 #endif /* NETIF_F_TSO */
 #ifdef HAVE_NDO_SET_FEATURES
 	/* copy netdev features into list of user selectable features */
-	netdev->hw_features |= netdev->features;
+#ifndef HAVE_RHEL6_NET_DEVICE_OPS_EXT
+	hw_features = netdev->hw_features;
+#else
+	hw_features = get_netdev_hw_features(netdev);
+#endif /* HAVE_RHEL6_NET_DEVICE_OPS_EXT */
+
+	hw_features |= netdev->features;
 #else
 #ifdef NETIF_F_GRO
         netdev->features |= NETIF_F_GRO;
 #endif /* NETIF_F_GRO */
+#endif /* HAVE_NDO_SET_FEATURES */
+
+#ifdef HAVE_NDO_SET_FEATURES
+#ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
+	set_netdev_hw_features(netdev, hw_features);
+#else
+	netdev->hw_features = hw_features;
+#endif
 #endif /* HAVE_NDO_SET_FEATURES */
 
 #ifdef HAVE_NETDEV_VLAN_FEATURES

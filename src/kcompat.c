@@ -752,12 +752,8 @@ int _kc_pci_save_state(struct pci_dev *pdev)
 
 void _kc_pci_restore_state(struct pci_dev *pdev)
 {
-#if defined(DRIVER_IXGBE) || defined(DRIVER_I40E) || defined(DRIVER_IXGBEVF)
-	struct adapter_struct *adapter = pci_get_drvdata(pdev);
-#else
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct adapter_struct *adapter = netdev_priv(netdev);
-#endif
 	int size = PCI_CONFIG_SPACE_LEN, i;
 	u16 pcie_cap_offset;
 	u16 pcie_link_status;
@@ -942,29 +938,13 @@ void _kc_print_hex_dump(const char *level,
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24) )
 #ifndef ESX40
 #ifdef NAPI
-#if defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) || \
-	defined(DRIVER_IXGBEVF)
-struct net_device *napi_to_poll_dev(const struct napi_struct *napi)
-{
-	struct adapter_q_vector *q_vector = container_of(napi,
-	                                                struct adapter_q_vector,
-	                                                napi);
-	return &q_vector->poll_dev;
-}
-#endif
 
 int __kc_adapter_clean(struct net_device *netdev, int *budget)
 {
 	int work_done;
 	int work_to_do = min(*budget, netdev->quota);
-#if defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) || \
-	defined(E1000E_MQ) || defined(DRIVER_IXGBEVF)
-	/* kcompat.h netif_napi_add puts napi struct in "fake netdev->priv" */
-	struct napi_struct *napi = netdev->priv;
-#else
 	struct adapter_struct *adapter = netdev_priv(netdev);
 	struct napi_struct *napi = &(adapter->q_vector[0])->napi;
-#endif
 	work_done = napi->poll(napi, work_to_do);
 	*budget -= work_done;
 	netdev->quota -= work_done;
@@ -1033,21 +1013,19 @@ void _kc_netif_tx_start_all_queues(struct net_device *netdev)
 #endif /* ESX40 */
 #endif /* HAVE_TX_MQ */
 
-#ifndef __WARN_printf
 void __kc_warn_slowpath(const char *file, int line, const char *fmt, ...)
 {
 	va_list args;
 
 	printk(KERN_WARNING "------------[ cut here ]------------\n");
-	printk(KERN_WARNING "WARNING: at %s:%d %s()\n", file, line);
+	printk(KERN_WARNING "WARNING: at %s:%d \n", file, line);
 	va_start(args, fmt);
 	vprintk(fmt, args);
 	va_end(args);
 
 	dump_stack();
 }
-#endif /* __WARN_printf */
-#endif /* < 2.6.27 */
+#endif /* __VMKLNX__ */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28) )
@@ -1138,57 +1116,6 @@ int _kc_pci_num_vf(struct pci_dev __maybe_unused *dev)
 
 #ifndef ESX40
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35) )
-#if defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) || defined(DRIVER_IXGBEVF) || defined(DRIVER_FM10K)
-#ifdef HAVE_TX_MQ
-#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0)))
-#ifndef CONFIG_NETDEVICES_MULTIQUEUE
-void _kc_netif_set_real_num_tx_queues(struct net_device *dev, unsigned int txq)
-{
-	unsigned int real_num = dev->real_num_tx_queues;
-	struct Qdisc *qdisc;
-	int i;
-
-	if (unlikely(txq > dev->num_tx_queues))
-		;
-	else if (txq > real_num)
-		dev->real_num_tx_queues = txq;
-	else if ( txq < real_num) {
-		dev->real_num_tx_queues = txq;
-		for (i = txq; i < dev->num_tx_queues; i++) {
-			qdisc = netdev_get_tx_queue(dev, i)->qdisc;
-			if (qdisc) {
-				spin_lock_bh(qdisc_lock(qdisc));
-				qdisc_reset(qdisc);
-				spin_unlock_bh(qdisc_lock(qdisc));
-			}
-		}
-	}
-}
-#endif /* CONFIG_NETDEVICES_MULTIQUEUE */
-#endif /* !(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0)) */
-#endif /* HAVE_TX_MQ */
-
-ssize_t _kc_simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
-				   const void __user *from, size_t count)
-{
-        loff_t pos = *ppos;
-        size_t res;
-
-        if (pos < 0)
-                return -EINVAL;
-        if (pos >= available || !count)
-                return 0;
-        if (count > available - pos)
-                count = available - pos;
-        res = copy_from_user(to + pos, from, count);
-        if (res == count)
-                return -EFAULT;
-        count -= res;
-        *ppos = pos + count;
-        return count;
-}
-
-#endif /* defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) */
 #endif /* < 2.6.35 */
 #endif /* ESX40 */
 
@@ -1524,6 +1451,62 @@ int __kc_pci_vfs_assigned(struct pci_dev __maybe_unused *dev)
 #endif /* CONFIG_PCI_IOV */
 #endif /* 3.10.0 */
 
+/*****************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0) )
+const unsigned char pcie_link_speed[] = {
+	PCI_SPEED_UNKNOWN,      /* 0 */
+	PCIE_SPEED_2_5GT,       /* 1 */
+	PCIE_SPEED_5_0GT,       /* 2 */
+	PCIE_SPEED_8_0GT,       /* 3 */
+	PCI_SPEED_UNKNOWN,      /* 4 */
+	PCI_SPEED_UNKNOWN,      /* 5 */
+	PCI_SPEED_UNKNOWN,      /* 6 */
+	PCI_SPEED_UNKNOWN,      /* 7 */
+	PCI_SPEED_UNKNOWN,      /* 8 */
+	PCI_SPEED_UNKNOWN,      /* 9 */
+	PCI_SPEED_UNKNOWN,      /* A */
+	PCI_SPEED_UNKNOWN,      /* B */
+	PCI_SPEED_UNKNOWN,      /* C */
+	PCI_SPEED_UNKNOWN,      /* D */
+	PCI_SPEED_UNKNOWN,      /* E */
+	PCI_SPEED_UNKNOWN       /* F */
+};
+
+int __kc_pcie_get_minimum_link(struct pci_dev *dev, enum pci_bus_speed *speed,
+			       enum pcie_link_width *width)
+{
+	int ret;
+
+	*speed = PCI_SPEED_UNKNOWN;
+	*width = PCIE_LNK_WIDTH_UNKNOWN;
+
+	while (dev) {
+		u16 lnksta;
+		enum pci_bus_speed next_speed;
+		enum pcie_link_width next_width;
+
+		ret = pcie_capability_read_word(dev, PCI_EXP_LNKSTA, &lnksta);
+		if (ret)
+			return ret;
+
+		next_speed = pcie_link_speed[lnksta & PCI_EXP_LNKSTA_CLS];
+		next_width = (lnksta & PCI_EXP_LNKSTA_NLW) >>
+			PCI_EXP_LNKSTA_NLW_SHIFT;
+
+		if (next_speed < *speed)
+			*speed = next_speed;
+
+		if (next_width < *width)
+			*width = next_width;
+
+		dev = dev->bus->self;
+	}
+
+	return 0;
+}
+
+#endif
+
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) )
 int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask)
 {
@@ -1537,6 +1520,21 @@ int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask)
 		 */
 		err = dma_set_coherent_mask(dev, mask);
 	return err;
+}
+
+void __kc_netdev_rss_key_fill(void *buffer, size_t len)
+{
+	/* Set of random keys generated using kernel random number generator */
+	static const u8 seed[NETDEV_RSS_KEY_LEN] = {0xE6, 0xFA, 0x35, 0x62,
+				0x95, 0x12, 0x3E, 0xA3, 0xFB, 0x46, 0xC1, 0x5F,
+				0xB1, 0x43, 0x82, 0x5B, 0x6A, 0x49, 0x50, 0x95,
+				0xCD, 0xAB, 0xD8, 0x11, 0x8F, 0xC5, 0xBD, 0xBC,
+				0x6A, 0x4A, 0xB2, 0xD4, 0x1F, 0xFE, 0xBC, 0x41,
+				0xBF, 0xAC, 0xB2, 0x9A, 0x8F, 0x70, 0xE9, 0x2A,
+				0xD7, 0xB2, 0x80, 0xB6, 0x5B, 0xAA, 0x9D, 0x20};
+
+	BUG_ON(len > NETDEV_RSS_KEY_LEN);
+	memcpy(buffer, seed, len);
 }
 #endif /* 3.13.0 */
 
@@ -1878,3 +1876,16 @@ again:
 
 #endif /* < 3.18.0 */
 
+/******************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0) )
+#ifdef HAVE_NET_GET_RANDOM_ONCE
+static u8 __kc_netdev_rss_key[NETDEV_RSS_KEY_LEN];
+
+void __kc_netdev_rss_key_fill(void *buffer, size_t len)
+{
+	BUG_ON(len > sizeof(__kc_netdev_rss_key));
+	net_get_random_once(__kc_netdev_rss_key, sizeof(__kc_netdev_rss_key));
+	memcpy(buffer, __kc_netdev_rss_key, len);
+}
+#endif
+#endif
