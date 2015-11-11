@@ -394,6 +394,8 @@ struct ixgbevf_adapter {
 #define IXGBEVF_FLAG_RESET_REQUESTED		(u32)(1 << 1)
 
 #define IXGBEVF_FLAG_QUEUE_RESET_REQUESTED	(u32)(1 << 3)
+#define IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP		(u32)(1 << 4)
+#define IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP		(u32)(1 << 5)
 
 	/* Tx hotpath */
 	u16 tx_ring_count;

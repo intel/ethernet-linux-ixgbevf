@@ -704,4 +704,3 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 
 	return err;
 }
-

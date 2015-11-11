@@ -60,11 +60,14 @@
 #endif
 
 #define IXGBE_REMOVED(a) unlikely(!(a))
+#define IXGBE_DEAD_READ_RETRIES 10
+#define IXGBE_DEAD_READ_REG 0xdeadbeefU
 #define IXGBE_FAILED_READ_REG 0xffffffffU
 
 #define IXGBE_WRITE_REG_ARRAY(a, reg, offset, value) \
     IXGBE_WRITE_REG((a), (reg) + ((offset) << 2), (value))
 
+#define IXGBE_READ_REG(a, reg) ixgbe_read_reg(a, reg)
 #define IXGBE_READ_REG_ARRAY(a, reg, offset) \
     IXGBE_READ_REG((a), (reg) + ((offset) << 2))
 
@@ -82,7 +85,6 @@ struct ixgbevf_msg {
 struct net_device *ixgbevf_hw_to_netdev(const struct ixgbe_hw *hw);
 struct ixgbevf_msg *ixgbevf_hw_to_msg(const struct ixgbe_hw *hw);
 
-void ixgbevf_check_remove(struct ixgbe_hw *hw, u32 reg);
 extern u16 ixgbe_read_pci_cfg_word(struct ixgbe_hw *hw, u32 reg);
 extern void ixgbe_write_pci_cfg_word(struct ixgbe_hw *hw, u32 reg, u16 value);
 #define IXGBE_READ_PCIE_WORD ixgbe_read_pci_cfg_word

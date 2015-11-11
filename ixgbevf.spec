@@ -1,6 +1,6 @@
 Name: ixgbevf
 Summary: Intel(R) 82599 Virtual Function
-Version: 2.16.4
+Version: 3.0.2
 Release: 1
 Source: %{name}-%{version}.tar.gz
 Vendor: Intel Corporation

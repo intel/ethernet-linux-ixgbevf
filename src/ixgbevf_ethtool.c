@@ -125,18 +125,18 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 	if (link_up) {
 		switch(link_speed) {
 		case IXGBE_LINK_SPEED_10GB_FULL:
-			ecmd->speed = SPEED_10000;
+			ethtool_cmd_speed_set(ecmd, SPEED_10000);
 			break;
 		case IXGBE_LINK_SPEED_1GB_FULL:
-			ecmd->speed = SPEED_1000;
+			ethtool_cmd_speed_set(ecmd, SPEED_1000);
 			break;
 		case IXGBE_LINK_SPEED_100_FULL:
-			ecmd->speed = SPEED_100;
+			ethtool_cmd_speed_set(ecmd, SPEED_100);
 			break;
 		}
 		ecmd->duplex = DUPLEX_FULL;
 	} else {
-		ecmd->speed = -1;
+		ethtool_cmd_speed_set(ecmd, SPEED_UNKNOWN);
 		ecmd->duplex = -1;
 	}
 
@@ -1028,6 +1028,184 @@ static int ixgbevf_set_coalesce(struct net_device *netdev,
 	return 0;
 }
 
+#ifdef ETHTOOL_GRXRINGS
+#define UDP_RSS_FLAGS (IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP | \
+		       IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP)
+static int ixgbevf_set_rss_hash_opt(struct ixgbevf_adapter *adapter,
+				    struct ethtool_rxnfc *nfc)
+{
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 flags = adapter->flags;
+
+
+	if (hw->mac.type < ixgbe_mac_X550)
+		return -EOPNOTSUPP;
+
+	/*
+	 * RSS does not support anything other than hashing
+	 * to queues on src and dst IPs and ports
+	 */
+	if (nfc->data & ~(RXH_IP_SRC | RXH_IP_DST |
+			  RXH_L4_B_0_1 | RXH_L4_B_2_3))
+		return -EINVAL;
+
+	switch (nfc->flow_type) {
+	case TCP_V4_FLOW:
+	case TCP_V6_FLOW:
+		if (!(nfc->data & RXH_IP_SRC) ||
+		    !(nfc->data & RXH_IP_DST) ||
+		    !(nfc->data & RXH_L4_B_0_1) ||
+		    !(nfc->data & RXH_L4_B_2_3))
+			return -EINVAL;
+		break;
+	case UDP_V4_FLOW:
+		if (!(nfc->data & RXH_IP_SRC) ||
+		    !(nfc->data & RXH_IP_DST))
+			return -EINVAL;
+		switch (nfc->data & (RXH_L4_B_0_1 | RXH_L4_B_2_3)) {
+		case 0:
+			flags &= ~IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP;
+			break;
+		case (RXH_L4_B_0_1 | RXH_L4_B_2_3):
+			flags |= IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	case UDP_V6_FLOW:
+		if (!(nfc->data & RXH_IP_SRC) ||
+		    !(nfc->data & RXH_IP_DST))
+			return -EINVAL;
+		switch (nfc->data & (RXH_L4_B_0_1 | RXH_L4_B_2_3)) {
+		case 0:
+			flags &= ~IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP;
+			break;
+		case (RXH_L4_B_0_1 | RXH_L4_B_2_3):
+			flags |= IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	case AH_ESP_V4_FLOW:
+	case AH_V4_FLOW:
+	case ESP_V4_FLOW:
+	case SCTP_V4_FLOW:
+	case AH_ESP_V6_FLOW:
+	case AH_V6_FLOW:
+	case ESP_V6_FLOW:
+	case SCTP_V6_FLOW:
+		if (!(nfc->data & RXH_IP_SRC) ||
+		    !(nfc->data & RXH_IP_DST) ||
+		    (nfc->data & RXH_L4_B_0_1) ||
+		    (nfc->data & RXH_L4_B_2_3))
+			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* if we changed something we need to update flags */
+	if (flags != adapter->flags) {
+		u32 vfmrqc;
+
+		vfmrqc = IXGBE_READ_REG(hw, IXGBE_VFMRQC);
+
+		if ((flags & UDP_RSS_FLAGS) &&
+		    !(adapter->flags & UDP_RSS_FLAGS))
+			DPRINTK(DRV, WARNING, "enabling UDP RSS: fragmented packets may arrive out of order to the stack above\n");
+
+		adapter->flags = flags;
+
+		/* Perform hash on these packet types */
+		vfmrqc |= IXGBE_MRQC_RSS_FIELD_IPV4
+		      | IXGBE_MRQC_RSS_FIELD_IPV4_TCP
+		      | IXGBE_MRQC_RSS_FIELD_IPV6
+		      | IXGBE_MRQC_RSS_FIELD_IPV6_TCP;
+
+		vfmrqc &= ~(IXGBE_MRQC_RSS_FIELD_IPV4_UDP |
+			  IXGBE_MRQC_RSS_FIELD_IPV6_UDP);
+
+		if (flags & IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP)
+			vfmrqc |= IXGBE_MRQC_RSS_FIELD_IPV4_UDP;
+
+		if (flags & IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP)
+			vfmrqc |= IXGBE_MRQC_RSS_FIELD_IPV6_UDP;
+
+		IXGBE_WRITE_REG(hw, IXGBE_VFMRQC, vfmrqc);
+	}
+
+	return 0;
+}
+
+static int ixgbevf_get_rss_hash_opts(struct ixgbevf_adapter *adapter,
+				   struct ethtool_rxnfc *cmd)
+{
+	cmd->data = 0;
+
+	/* Report default options for RSS on ixgbevf */
+	switch (cmd->flow_type) {
+	case TCP_V4_FLOW:
+		cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+	case UDP_V4_FLOW:
+		if (adapter->flags & IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP)
+			cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+		/* fall through */
+	case SCTP_V4_FLOW:
+	case AH_ESP_V4_FLOW:
+	case AH_V4_FLOW:
+	case ESP_V4_FLOW:
+	case IPV4_FLOW:
+		cmd->data |= RXH_IP_SRC | RXH_IP_DST;
+		break;
+	case TCP_V6_FLOW:
+		cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+	case UDP_V6_FLOW:
+		if (adapter->flags & IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP)
+			cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+		/* fall through */
+	case SCTP_V6_FLOW:
+	case AH_ESP_V6_FLOW:
+	case AH_V6_FLOW:
+	case ESP_V6_FLOW:
+	case IPV6_FLOW:
+		cmd->data |= RXH_IP_SRC | RXH_IP_DST;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int ixgbevf_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(dev);
+	int ret = -EOPNOTSUPP;
+
+	if (cmd->cmd == ETHTOOL_SRXFH)
+		ret = ixgbevf_set_rss_hash_opt(adapter, cmd);
+
+	return ret;
+}
+
+static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
+#ifdef HAVE_ETHTOOL_GET_RXNFC_VOID_RULE_LOCS
+			     __always_unused void *rule_locs)
+#else
+			     __always_unused u32 *rule_locs)
+#endif
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(dev);
+	int ret = -EOPNOTSUPP;
+
+	if (cmd->cmd == ETHTOOL_GRXFH)
+		ret = ixgbevf_get_rss_hash_opts(adapter, cmd);
+
+	return ret;
+}
+#endif /* ETHTOOL_GRXRINGS */
 
 static struct ethtool_ops ixgbevf_ethtool_ops = {
 	.get_settings           = ixgbevf_get_settings,
@@ -1074,6 +1252,10 @@ static struct ethtool_ops ixgbevf_ethtool_ops = {
 #endif
 	.get_coalesce           = ixgbevf_get_coalesce,
 	.set_coalesce           = ixgbevf_set_coalesce,
+#ifdef ETHTOOL_GRXRINGS
+	.get_rxnfc		= ixgbevf_get_rxnfc,
+	.set_rxnfc		= ixgbevf_set_rxnfc,
+#endif
 };
 
 #ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT

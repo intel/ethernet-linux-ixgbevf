@@ -2322,25 +2322,53 @@ struct napi_struct {
 
 #ifdef NAPI
 extern int __kc_adapter_clean(struct net_device *, int *);
-/* The following defines only provide limited support for NAPI calls and
- * should only be used by drivers which are not multi-queue enabled.
+/* The following definitions are multi-queue aware, and thus we have a driver
+ * define list which determines which drivers support multiple queues, and
+ * thus need these stronger defines. If a driver does not support multi-queue
+ * functionality, you don't need to add it to this list.
  */
+extern struct net_device *napi_to_poll_dev(const struct napi_struct *napi);
 
-#define napi_to_poll_dev(_napi) (_napi)->dev
-
-static inline void __kc_netif_napi_add(struct net_device *dev, struct napi_struct *napi,
-				  int (*poll)(struct napi_struct *, int), int weight)
+static inline void __kc_mq_netif_napi_add(struct net_device *dev, struct napi_struct *napi,
+					  int (*poll)(struct napi_struct *, int), int weight)
 {
-	dev->poll = __kc_adapter_clean;
-	dev->weight = weight;
+	struct net_device *poll_dev = napi_to_poll_dev(napi);
+	poll_dev->poll = __kc_adapter_clean;
+	poll_dev->priv = napi;
+	poll_dev->weight = weight;
+	set_bit(__LINK_STATE_RX_SCHED, &poll_dev->state);
+	set_bit(__LINK_STATE_START, &poll_dev->state);
+	dev_hold(poll_dev);
 	napi->poll = poll;
+	napi->weight = weight;
 	napi->dev = dev;
 }
-#define netif_napi_add __kc_netif_napi_add
+#define netif_napi_add __kc_mq_netif_napi_add
 
-#define netif_napi_del(_a) do {} while (0)
-#define napi_schedule_prep(_napi) netif_rx_schedule_prep((_napi)->dev)
-#define napi_schedule(_napi) netif_rx_schedule((_napi)->dev)
+static inline void __kc_mq_netif_napi_del(struct napi_struct *napi)
+{
+	struct net_device *poll_dev = napi_to_poll_dev(napi);
+	WARN_ON(!test_bit(__LINK_STATE_RX_SCHED, &poll_dev->state));
+	dev_put(poll_dev);
+	memset(poll_dev, 0, sizeof(struct net_device));
+}
+
+#define netif_napi_del __kc_mq_netif_napi_del
+
+static inline bool __kc_mq_napi_schedule_prep(struct napi_struct *napi)
+{
+	return netif_running(napi->dev) &&
+		netif_rx_schedule_prep(napi_to_poll_dev(napi));
+}
+#define napi_schedule_prep __kc_mq_napi_schedule_prep
+
+static inline void __kc_mq_napi_schedule(struct napi_struct *napi)
+{
+	if (napi_schedule_prep(napi))
+		__netif_rx_schedule(napi_to_poll_dev(napi));
+}
+#define napi_schedule __kc_mq_napi_schedule
+
 #define napi_enable(_napi) netif_poll_enable(napi_to_poll_dev(_napi))
 #define napi_disable(_napi) netif_poll_disable(napi_to_poll_dev(_napi))
 #ifdef CONFIG_SMP
@@ -4222,11 +4250,7 @@ static inline void __kc_skb_set_hash(struct sk_buff __maybe_unused *skb,
 }
 #endif /* !skb_set_hash */
 
-#else
-
-#ifndef HAVE_ENCAP_TSO_OFFLOAD
-#define HAVE_ENCAP_TSO_OFFLOAD
-#endif /* HAVE_ENCAP_TSO_OFFLOAD */
+#else	/* RHEL_RELEASE_CODE >= 7.0 || SLE_VERSION_CODE >= 12.0 */
 
 #ifndef HAVE_VXLAN_RX_OFFLOAD
 #define HAVE_VXLAN_RX_OFFLOAD
@@ -4235,7 +4259,7 @@ static inline void __kc_skb_set_hash(struct sk_buff __maybe_unused *skb,
 #ifndef HAVE_VXLAN_CHECKS
 #define HAVE_VXLAN_CHECKS
 #endif /* HAVE_VXLAN_CHECKS */
-#endif /* !(RHEL_RELEASE_CODE&&RHEL_RELEASE_CODE>=RHEL_RELEASE_VERSION(7,0)) */
+#endif /* !(RHEL_RELEASE_CODE >= 7.0 && SLE_VERSION_CODE >= 12.0) */
 
 #ifndef pci_enable_msix_range
 extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
@@ -4498,12 +4522,16 @@ static inline struct sk_buff *__kc_napi_alloc_skb(struct napi_struct *napi, unsi
 #endif /* napi_alloc_skb */
 #define HAVE_CONFIG_PM_RUNTIME
 #if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,1))
-#define NDO_BRIDGE_GETLINK_HAS_FILTER_MASK_PARAM
+#define NDO_DFLT_BRIDGE_GETLINK_HAS_BRFLAGS
 #define HAVE_RXFH_HASHFUNC
 #endif /* RHEL_RELEASE_CODE */
+#ifndef napi_schedule_irqoff
+#define napi_schedule_irqoff	napi_schedule
+#endif
 #else /* 3.19.0 */
 #define HAVE_NDO_FDB_ADD_VID
 #define HAVE_RXFH_HASHFUNC
+#define NDO_DFLT_BRIDGE_GETLINK_HAS_BRFLAGS
 #endif /* 3.19.0 */
 
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,20,0) )
@@ -4538,9 +4566,10 @@ static inline void __kc_timecounter_adjtime(struct timecounter *tc, s64 delta)
 #else
 #define HAVE_PTP_CLOCK_INFO_GETTIME64
 #define HAVE_NDO_BRIDGE_GETLINK_NLFLAGS
+#define HAVE_PASSTHRU_FEATURES_CHECK
 #endif /* 4,1,0 */
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0) )
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,1,9))
 #if (!(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,1,0)))
 static inline bool page_is_pfmemalloc(struct page __maybe_unused *page)
 {
@@ -4551,10 +4580,13 @@ static inline bool page_is_pfmemalloc(struct page __maybe_unused *page)
 #endif
 }
 #endif /* !SLES12sp1 */
+#else
+#undef HAVE_STRUCT_PAGE_PFMEMALLOC
+#endif /* 4.1.9 */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0))
 #else
 #define HAVE_NDO_DFLT_BRIDGE_GETLINK_VLAN_SUPPORT
-#undef HAVE_STRUCT_PAGE_PFMEMALLOC
 #endif /* 4.2.0 */
 
 #endif /* _KCOMPAT_H_ */

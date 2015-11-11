@@ -24,6 +24,8 @@
 #ifndef _IXGBEVF_OSDEP2_H_
 #define _IXGBEVF_OSDEP2_H_
 
+u32 ixgbe_read_reg(struct ixgbe_hw *hw, u32 reg);
+
 static inline void IXGBE_WRITE_REG(struct ixgbe_hw *hw, u32 reg, u32 value)
 {
 	u8 __iomem *reg_addr;
@@ -46,20 +48,6 @@ static inline void IXGBE_WRITE_REG(struct ixgbe_hw *hw, u32 reg, u32 value)
 	}
 #endif /* DBG */
 	writel(value, reg_addr + reg);
-}
-
-static inline u32 IXGBE_READ_REG(struct ixgbe_hw *hw, u32 reg)
-{
-	u32 value;
-	u8 __iomem *reg_addr;
-
-	reg_addr = ACCESS_ONCE(hw->hw_addr);
-	if (IXGBE_REMOVED(reg_addr))
-		return IXGBE_FAILED_READ_REG;
-	value = readl(reg_addr + reg);
-	if (unlikely(value == IXGBE_FAILED_READ_REG))
-		ixgbevf_check_remove(hw, reg);
-	return value;
 }
 
 static inline void IXGBE_WRITE_REG64(struct ixgbe_hw *hw, u32 reg, u64 value)
