@@ -58,7 +58,7 @@ static const char ixgbevf_driver_string[] =
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(3.0.3) RELEASE_TAG
+#define DRV_VERSION __stringify(3.1.1) RELEASE_TAG
 const char ixgbevf_driver_version[] = DRV_VERSION;
 static char ixgbevf_copyright[] = "Copyright (c) 2009-2015 Intel Corporation.";
 
@@ -87,12 +87,6 @@ enum ixgbevf_boards {
 	board_X540_vf,
 	board_X550_vf,
 	board_X550EM_x_vf,
-};
-
-enum ixgbevf_xcast_modes {
-	IXGBEVF_XCAST_MODE_NONE = 0,
-	IXGBEVF_XCAST_MODE_MULTI,
-	IXGBEVF_XCAST_MODE_ALLMULTI,
 };
 
 static const struct ixgbevf_info *ixgbevf_info_tbl[] = {
@@ -1407,7 +1401,7 @@ static void ixgbevf_configure_msix(struct ixgbevf_adapter *adapter)
 		if (q_vector->tx.ring && !q_vector->rx.ring) {
 			/* tx only vector */
 			if (adapter->tx_itr_setting == 1)
-				q_vector->itr = IXGBE_10K_ITR;
+				q_vector->itr = IXGBE_12K_ITR;
 			else
 				q_vector->itr = adapter->tx_itr_setting;
 		} else {
@@ -1468,7 +1462,7 @@ static void ixgbevf_update_itr(struct ixgbevf_q_vector *q_vector,
 	/* simple throttlerate management
 	 *    0-20MB/s lowest (100000 ints/s)
 	 *   20-100MB/s low   (20000 ints/s)
-	 *  100-1249MB/s bulk (8000 ints/s)
+	 *  100-1249MB/s bulk (12000 ints/s)
 	 */
 	/* what was last interrupt timeslice? */
 	timepassed_us = q_vector->itr >> 2;
@@ -1522,7 +1516,7 @@ static void ixgbevf_set_itr(struct ixgbevf_q_vector *q_vector)
 		new_itr = IXGBE_20K_ITR;
 		break;
 	case bulk_latency:
-		new_itr = IXGBE_8K_ITR;
+		new_itr = IXGBE_12K_ITR;
 		break;
 	default:
 		break;
@@ -1565,7 +1559,7 @@ static irqreturn_t ixgbevf_msix_clean_rings(int __always_unused irq, void *data)
 
 	/* EIAM disabled interrupts (on this vector) for us */
 	if (q_vector->rx.ring || q_vector->tx.ring)
-		napi_schedule(&q_vector->napi);
+		napi_schedule_irqoff(&q_vector->napi);
 
 	return IRQ_HANDLED;
 }
@@ -2190,12 +2184,6 @@ static void ixgbevf_set_rx_mode(struct net_device *netdev)
 	struct ixgbe_hw *hw = &adapter->hw;
 	u8 *addr_list = NULL;
 	int addr_count = 0;
-	unsigned int flags = netdev->flags;
-	int xcast_mode;
-
-	xcast_mode = (flags & IFF_ALLMULTI) ? IXGBEVF_XCAST_MODE_ALLMULTI :
-		     (flags & (IFF_BROADCAST | IFF_MULTICAST)) ?
-		     IXGBEVF_XCAST_MODE_MULTI : IXGBEVF_XCAST_MODE_NONE;
 
 	/* reprogram multicast list */
 	addr_count = netdev_mc_count(netdev);
@@ -2212,8 +2200,6 @@ static void ixgbevf_set_rx_mode(struct net_device *netdev)
 		addr_list = netdev->mc_list->dmi_addr;
 #endif
 	spin_lock_bh(&adapter->mbx_lock);
-
-	hw->mac.ops.update_xcast_mode(hw, netdev, xcast_mode);
 
 	hw->mac.ops.update_mc_addr_list(hw, addr_list, addr_count,
 					ixgbevf_addr_list_itr, false);
@@ -2350,8 +2336,7 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_12,
-		      ixgbe_mbox_api_11,
+	int api[] = { ixgbe_mbox_api_11,
 		      ixgbe_mbox_api_10,
 		      ixgbe_mbox_api_unknown };
 	int err = 0, idx = 0;
@@ -2667,7 +2652,6 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 
 		switch (hw->api_version) {
 		case ixgbe_mbox_api_11:
-		case ixgbe_mbox_api_12:
 			adapter->num_rx_queues = rss;
 #ifdef HAVE_TX_MQ
 			adapter->num_tx_queues = rss;
@@ -3045,7 +3029,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 		if (err) {
 			dev_err(pci_dev_to_dev(pdev),
 				"init_shared_code failed: %d\n", err);
-			goto out;
+			return err;
 		}
 		ixgbevf_negotiate_api(adapter);
 		err = hw->mac.ops.get_mac_addr(hw, hw->mac.addr);
@@ -3061,6 +3045,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 		dev_info(&pdev->dev, "Assigning random MAC address\n");
 		eth_hw_addr_random(netdev);
 		ether_addr_copy(hw->mac.addr, netdev->dev_addr);
+		ether_addr_copy(hw->mac.perm_addr, netdev->dev_addr);
 	}
 
 	/* set default ring sizes */
@@ -3072,8 +3057,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 
 	set_bit(__IXGBEVF_DOWN, &adapter->state);
 
-out:
-	return err;
+	return 0;
 }
 
 #define UPDATE_VF_COUNTER_32bit(reg, last_counter, counter)	\
@@ -3589,7 +3573,13 @@ static int ixgbevf_open(struct net_device *netdev)
 		goto err_req_irq;
 
 	/* Notify the stack of the actual queue counts. */
+#ifdef HAVE_NETIF_SET_REAL_NUM_TX_QUEUES_VOID
 	netif_set_real_num_tx_queues(netdev, adapter->num_tx_queues);
+#else
+	err = netif_set_real_num_tx_queues(netdev, adapter->num_tx_queues);
+	if (err)
+		goto err_set_queues;
+#endif
 
 	err = netif_set_real_num_rx_queues(netdev, adapter->num_rx_queues);
 	if (err)
@@ -4444,6 +4434,9 @@ static const struct net_device_ops ixgbevf_netdev_ops = {
 #endif /* !HAVE_RHEL6_NET_DEVICE_EXTENDED */
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= ixgbevf_netpoll,
+#endif
+#ifdef HAVE_PASSTHRU_FEATURES_CHECK
+	.ndo_features_check	= passthru_features_check,
 #endif
 };
 #endif /* HAVE_NET_DEVICE_OPS */

@@ -338,8 +338,7 @@ static inline bool ixgbevf_qv_disable(struct ixgbevf_q_vector *q_vector)
 #define IXGBE_MIN_RSC_ITR	24
 #define IXGBE_100K_ITR		40
 #define IXGBE_20K_ITR		200
-#define IXGBE_10K_ITR		400
-#define IXGBE_8K_ITR		500
+#define IXGBE_12K_ITR		336
 
 /* ixgbevf_test_staterr - tests bits in Rx descriptor status and error fields */
 static inline __le32 ixgbevf_test_staterr(union ixgbe_adv_rx_desc *rx_desc,
