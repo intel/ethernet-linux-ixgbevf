@@ -32,6 +32,46 @@
 #endif
 
 /**
+ *  ixgbevf_update_xcast_mode - Update Multicast mode
+ *  @hw: pointer to the HW structure
+ *  @netdev: pointer to net device structure
+ *  @xcast_mode: new multicast mode
+ *
+ *  Updates the Multicast Mode of VF.
+**/
+static s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw,
+				     struct net_device *netdev, int xcast_mode)
+{
+	struct ixgbe_mbx_info *mbx = &hw->mbx;
+	u32 msgbuf[2];
+	s32 err;
+
+	switch (hw->api_version) {
+	case ixgbe_mbox_api_12:
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
+	msgbuf[0] = IXGBE_VF_UPDATE_XCAST_MODE;
+	msgbuf[1] = xcast_mode;
+
+	err = mbx->ops.write_posted(hw, msgbuf, 2, 0);
+	if (err)
+		return err;
+
+	err = mbx->ops.read_posted(hw, msgbuf, 2, 0);
+	if (err)
+		return err;
+
+	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
+	if (msgbuf[0] == (IXGBE_VF_UPDATE_XCAST_MODE | IXGBE_VT_MSGTYPE_NACK))
+		return -EPERM;
+
+	return 0;
+}
+
+/**
  *  ixgbe_init_ops_vf - Initialize the pointers for vf
  *  @hw: pointer to hardware structure
  *
@@ -63,6 +103,7 @@ s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.ops.set_uc_addr = ixgbevf_set_uc_addr_vf;
 	hw->mac.ops.init_rx_addrs = NULL;
 	hw->mac.ops.update_mc_addr_list = ixgbe_update_mc_addr_list_vf;
+	hw->mac.ops.update_xcast_mode = ixgbevf_update_xcast_mode;
 	hw->mac.ops.enable_mc = NULL;
 	hw->mac.ops.disable_mc = NULL;
 	hw->mac.ops.clear_vfta = NULL;

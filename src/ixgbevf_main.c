@@ -58,7 +58,7 @@ static const char ixgbevf_driver_string[] =
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(3.1.1) RELEASE_TAG
+#define DRV_VERSION __stringify(3.1.2) RELEASE_TAG
 const char ixgbevf_driver_version[] = DRV_VERSION;
 static char ixgbevf_copyright[] = "Copyright (c) 2009-2015 Intel Corporation.";
 
@@ -87,6 +87,12 @@ enum ixgbevf_boards {
 	board_X540_vf,
 	board_X550_vf,
 	board_X550EM_x_vf,
+};
+
+enum ixgbevf_xcast_modes {
+	IXGBEVF_XCAST_MODE_NONE = 0,
+	IXGBEVF_XCAST_MODE_MULTI,
+	IXGBEVF_XCAST_MODE_ALLMULTI,
 };
 
 static const struct ixgbevf_info *ixgbevf_info_tbl[] = {
@@ -2184,6 +2190,12 @@ static void ixgbevf_set_rx_mode(struct net_device *netdev)
 	struct ixgbe_hw *hw = &adapter->hw;
 	u8 *addr_list = NULL;
 	int addr_count = 0;
+	unsigned int flags = netdev->flags;
+	int xcast_mode;
+
+	xcast_mode = (flags & IFF_ALLMULTI) ? IXGBEVF_XCAST_MODE_ALLMULTI :
+		     (flags & (IFF_BROADCAST | IFF_MULTICAST)) ?
+		     IXGBEVF_XCAST_MODE_MULTI : IXGBEVF_XCAST_MODE_NONE;
 
 	/* reprogram multicast list */
 	addr_count = netdev_mc_count(netdev);
@@ -2200,6 +2212,8 @@ static void ixgbevf_set_rx_mode(struct net_device *netdev)
 		addr_list = netdev->mc_list->dmi_addr;
 #endif
 	spin_lock_bh(&adapter->mbx_lock);
+
+	hw->mac.ops.update_xcast_mode(hw, netdev, xcast_mode);
 
 	hw->mac.ops.update_mc_addr_list(hw, addr_list, addr_count,
 					ixgbevf_addr_list_itr, false);
@@ -2336,7 +2350,8 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_11,
+	int api[] = { ixgbe_mbox_api_12,
+		      ixgbe_mbox_api_11,
 		      ixgbe_mbox_api_10,
 		      ixgbe_mbox_api_unknown };
 	int err = 0, idx = 0;
@@ -2652,6 +2667,7 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 
 		switch (hw->api_version) {
 		case ixgbe_mbox_api_11:
+		case ixgbe_mbox_api_12:
 			adapter->num_rx_queues = rss;
 #ifdef HAVE_TX_MQ
 			adapter->num_tx_queues = rss;
@@ -3573,13 +3589,9 @@ static int ixgbevf_open(struct net_device *netdev)
 		goto err_req_irq;
 
 	/* Notify the stack of the actual queue counts. */
-#ifdef HAVE_NETIF_SET_REAL_NUM_TX_QUEUES_VOID
-	netif_set_real_num_tx_queues(netdev, adapter->num_tx_queues);
-#else
 	err = netif_set_real_num_tx_queues(netdev, adapter->num_tx_queues);
 	if (err)
 		goto err_set_queues;
-#endif
 
 	err = netif_set_real_num_rx_queues(netdev, adapter->num_rx_queues);
 	if (err)
