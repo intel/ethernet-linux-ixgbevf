@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,6 +16,7 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
@@ -935,7 +936,6 @@ void _kc_print_hex_dump(const char *level,
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24) )
-#ifndef ESX40
 #ifdef NAPI
 struct net_device *napi_to_poll_dev(const struct napi_struct *napi)
 {
@@ -957,12 +957,10 @@ int __kc_adapter_clean(struct net_device *netdev, int *budget)
 	return (work_done >= work_to_do) ? 1 : 0;
 }
 #endif /* NAPI */
-#endif /* ESX40 */
 #endif /* <= 2.6.24 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26) )
-#ifndef ESX40
 void _kc_pci_disable_link_state(struct pci_dev *pdev, int state)
 {
 	struct pci_dev *parent = pdev->bus->self;
@@ -979,13 +977,11 @@ void _kc_pci_disable_link_state(struct pci_dev *pdev, int state)
 		pci_write_config_word(parent, pos + PCI_EXP_LNKCTL, link_state);
 	}
 }
-#endif /* ESX40 */
 #endif /* < 2.6.26 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27) )
 #ifdef HAVE_TX_MQ
-#ifndef ESX40
 void _kc_netif_tx_stop_all_queues(struct net_device *netdev)
 {
 	struct adapter_struct *adapter = netdev_priv(netdev);
@@ -1016,7 +1012,6 @@ void _kc_netif_tx_start_all_queues(struct net_device *netdev)
 		for (i = 0; i < adapter->num_tx_queues; i++)
 			netif_start_subqueue(netdev, i);
 }
-#endif /* ESX40 */
 #endif /* HAVE_TX_MQ */
 
 void __kc_warn_slowpath(const char *file, int line, const char *fmt, ...)
@@ -1120,7 +1115,6 @@ int _kc_pci_num_vf(struct pci_dev __maybe_unused *dev)
 #endif /* RHEL_RELEASE_CODE */
 #endif /* < 2.6.34 */
 
-#ifndef ESX40
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35) )
 #ifdef HAVE_TX_MQ
 #if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0)))
@@ -1175,7 +1169,6 @@ ssize_t _kc_simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
 }
 
 #endif /* < 2.6.35 */
-#endif /* ESX40 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) )
@@ -1201,8 +1194,6 @@ int _kc_ethtool_op_set_flags(struct net_device *dev, u32 data, u32 supported)
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39) )
 #if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,0)))
-
-
 
 #endif /* !(RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,0)) */
 #endif /* < 2.6.39 */
@@ -1393,6 +1384,112 @@ int __kc_pcie_capability_clear_word(struct pci_dev *dev, int pos,
 	return __kc_pcie_capability_clear_and_set_word(dev, pos, clear, 0);
 }
 #endif /* < 3.7.0 */
+
+/******************************************************************************
+ * ripped from linux/net/ipv6/exthdrs_core.c, GPL2, no direct copyright,
+ * inferred copyright from kernel
+ */
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) )
+int __kc_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
+		       int target, unsigned short *fragoff, int *flags)
+{
+	unsigned int start = skb_network_offset(skb) + sizeof(struct ipv6hdr);
+	u8 nexthdr = ipv6_hdr(skb)->nexthdr;
+	unsigned int len;
+	bool found;
+
+#define __KC_IP6_FH_F_FRAG	BIT(0)
+#define __KC_IP6_FH_F_AUTH	BIT(1)
+#define __KC_IP6_FH_F_SKIP_RH	BIT(2)
+
+	if (fragoff)
+		*fragoff = 0;
+
+	if (*offset) {
+		struct ipv6hdr _ip6, *ip6;
+
+		ip6 = skb_header_pointer(skb, *offset, sizeof(_ip6), &_ip6);
+		if (!ip6 || (ip6->version != 6)) {
+			printk(KERN_ERR "IPv6 header not found\n");
+			return -EBADMSG;
+		}
+		start = *offset + sizeof(struct ipv6hdr);
+		nexthdr = ip6->nexthdr;
+	}
+	len = skb->len - start;
+
+	do {
+		struct ipv6_opt_hdr _hdr, *hp;
+		unsigned int hdrlen;
+		found = (nexthdr == target);
+
+		if ((!ipv6_ext_hdr(nexthdr)) || nexthdr == NEXTHDR_NONE) {
+			if (target < 0 || found)
+				break;
+			return -ENOENT;
+		}
+
+		hp = skb_header_pointer(skb, start, sizeof(_hdr), &_hdr);
+		if (!hp)
+			return -EBADMSG;
+
+		if (nexthdr == NEXTHDR_ROUTING) {
+			struct ipv6_rt_hdr _rh, *rh;
+
+			rh = skb_header_pointer(skb, start, sizeof(_rh),
+						&_rh);
+			if (!rh)
+				return -EBADMSG;
+
+			if (flags && (*flags & __KC_IP6_FH_F_SKIP_RH) &&
+			    rh->segments_left == 0)
+				found = false;
+		}
+
+		if (nexthdr == NEXTHDR_FRAGMENT) {
+			unsigned short _frag_off;
+			__be16 *fp;
+
+			if (flags)	/* Indicate that this is a fragment */
+				*flags |= __KC_IP6_FH_F_FRAG;
+			fp = skb_header_pointer(skb,
+						start+offsetof(struct frag_hdr,
+							       frag_off),
+						sizeof(_frag_off),
+						&_frag_off);
+			if (!fp)
+				return -EBADMSG;
+
+			_frag_off = ntohs(*fp) & ~0x7;
+			if (_frag_off) {
+				if (target < 0 &&
+				    ((!ipv6_ext_hdr(hp->nexthdr)) ||
+				     hp->nexthdr == NEXTHDR_NONE)) {
+					if (fragoff)
+						*fragoff = _frag_off;
+					return hp->nexthdr;
+				}
+				return -ENOENT;
+			}
+			hdrlen = 8;
+		} else if (nexthdr == NEXTHDR_AUTH) {
+			if (flags && (*flags & __KC_IP6_FH_F_AUTH) && (target < 0))
+				break;
+			hdrlen = (hp->hdrlen + 2) << 2;
+		} else
+			hdrlen = ipv6_optlen(hp);
+
+		if (!found) {
+			nexthdr = hp->nexthdr;
+			len -= hdrlen;
+			start += hdrlen;
+		}
+	} while (!found);
+
+	*offset = start;
+	return nexthdr;
+}
+#endif /* < 3.8.0 */
 
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0) )

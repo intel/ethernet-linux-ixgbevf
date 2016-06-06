@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,6 +16,7 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
@@ -159,6 +160,11 @@ struct ixgbevf_ring {
 
 #define MAX_RX_QUEUES IXGBE_VF_MAX_RX_QUEUES
 #define MAX_TX_QUEUES IXGBE_VF_MAX_TX_QUEUES
+#define IXGBEVF_MAX_RSS_QUEUES		2
+#define IXGBEVF_82599_RETA_SIZE		128	/* 128 entries */
+#define IXGBEVF_X550_VFRETA_SIZE	64	/* 64 entries */
+#define IXGBEVF_RSS_HASH_KEY_SIZE	40
+#define IXGBEVF_VFRSSRK_REGS		10	/* 10 registers for RSS key */
 
 #define IXGBEVF_DEFAULT_TXD   1024
 #define IXGBEVF_DEFAULT_RXD   512
@@ -452,6 +458,9 @@ struct ixgbevf_adapter {
 
 	spinlock_t mbx_lock;
 	unsigned long last_reset;
+
+	u32 rss_key[IXGBEVF_VFRSSRK_REGS];
+	u8 rss_indir_tbl[IXGBEVF_X550_VFRETA_SIZE];
 };
 
 struct ixgbevf_info {
@@ -469,7 +478,14 @@ enum ixbgevf_state_t {
 	__IXGBEVF_SERVICE_INITED,
 };
 
+enum ixgbevf_xcast_modes {
+	IXGBEVF_XCAST_MODE_NONE = 0,
+	IXGBEVF_XCAST_MODE_MULTI,
+	IXGBEVF_XCAST_MODE_ALLMULTI,
+};
+
 #ifdef HAVE_VLAN_RX_REGISTER
+
 struct ixgbevf_cb {
 	u16 vid;			/* VLAN tag */
 };

@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,6 +16,7 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
@@ -64,10 +65,7 @@
 
 #include "ixgbevf_osdep.h"
 
-/* Override this by setting IOMEM in your ixgbe_osdep.h header */
-#ifndef IOMEM
-#define IOMEM
-#endif
+/* Override this by setting __iomem in your ixgbe_osdep.h header */
 
 /* Vendor ID */
 #define IXGBE_INTEL_VENDOR_ID			0x8086
@@ -91,11 +89,11 @@
 #define IXGBE_SUBDEV_ID_82599_560FLR		0x17D0
 #define IXGBE_SUBDEV_ID_82599_ECNA_DP		0x0470
 #define IXGBE_SUBDEV_ID_82599_SP_560FLR		0x211B
-#define IXGBE_SUBDEV_ID_82599_LOM_SFP		0x8976
 #define IXGBE_SUBDEV_ID_82599_LOM_SNAP6		0x2159
 #define IXGBE_SUBDEV_ID_82599_SFP_1OCP		0x000D
 #define IXGBE_SUBDEV_ID_82599_SFP_2OCP		0x0008
-#define IXGBE_SUBDEV_ID_82599_SFP_LOM		0x06EE
+#define IXGBE_SUBDEV_ID_82599_SFP_LOM_OEM1	0x8976
+#define IXGBE_SUBDEV_ID_82599_SFP_LOM_OEM2	0x06EE
 #define IXGBE_DEV_ID_82599_BACKPLANE_FCOE	0x152A
 #define IXGBE_DEV_ID_82599_SFP_FCOE		0x1529
 #define IXGBE_DEV_ID_82599_SFP_EM		0x1507
@@ -236,7 +234,6 @@
 #define IXGBE_I2C_CLK_OE_N_EN_X550EM_x	IXGBE_I2C_CLK_OE_N_EN_X550
 #define IXGBE_I2C_CLK_OE_N_EN_BY_MAC(_hw) IXGBE_BY_MAC((_hw), I2C_CLK_OE_N_EN)
 #define IXGBE_I2C_CLOCK_STRETCHING_TIMEOUT	500
-
 
 /* Interrupt Registers */
 #define IXGBE_EICR		0x00800
@@ -656,8 +653,6 @@ struct ixgbe_dmac_config {
 #define IXGBE_EEE_RX_LPI_STATUS		0x40000000 /* RX Link in LPI status */
 #define IXGBE_EEE_TX_LPI_STATUS		0x80000000 /* TX Link in LPI status */
 
-
-
 /* Security Control Registers */
 #define IXGBE_SECTXCTRL		0x08800
 #define IXGBE_SECTXSTAT		0x08804
@@ -782,7 +777,6 @@ struct ixgbe_dmac_config {
 #define IXGBE_RTTBCNRC_RF_INT_MASK \
 	(IXGBE_RTTBCNRC_RF_DEC_MASK << IXGBE_RTTBCNRC_RF_INT_SHIFT)
 #define IXGBE_RTTBCNRM	0x04980
-
 
 /* FCoE DMA Context Registers */
 /* FCoE Direct DMA Context */
@@ -1004,14 +998,32 @@ struct ixgbe_dmac_config {
 #define IXGBE_PCIEPIPEDAT	0x11008
 #define IXGBE_GSCL_1		0x11010
 #define IXGBE_GSCL_2		0x11014
+#define IXGBE_GSCL_1_X540	IXGBE_GSCL_1
+#define IXGBE_GSCL_2_X540	IXGBE_GSCL_2
 #define IXGBE_GSCL_3		0x11018
 #define IXGBE_GSCL_4		0x1101C
 #define IXGBE_GSCN_0		0x11020
 #define IXGBE_GSCN_1		0x11024
 #define IXGBE_GSCN_2		0x11028
 #define IXGBE_GSCN_3		0x1102C
+#define IXGBE_GSCN_0_X540	IXGBE_GSCN_0
+#define IXGBE_GSCN_1_X540	IXGBE_GSCN_1
+#define IXGBE_GSCN_2_X540	IXGBE_GSCN_2
+#define IXGBE_GSCN_3_X540	IXGBE_GSCN_3
 #define IXGBE_FACTPS		0x10150
 #define IXGBE_FACTPS_X540	IXGBE_FACTPS
+#define IXGBE_GSCL_1_X550	0x11800
+#define IXGBE_GSCL_2_X550	0x11804
+#define IXGBE_GSCL_1_X550EM_x	IXGBE_GSCL_1_X550
+#define IXGBE_GSCL_2_X550EM_x	IXGBE_GSCL_2_X550
+#define IXGBE_GSCN_0_X550	0x11820
+#define IXGBE_GSCN_1_X550	0x11824
+#define IXGBE_GSCN_2_X550	0x11828
+#define IXGBE_GSCN_3_X550	0x1182C
+#define IXGBE_GSCN_0_X550EM_x	IXGBE_GSCN_0_X550
+#define IXGBE_GSCN_1_X550EM_x	IXGBE_GSCN_1_X550
+#define IXGBE_GSCN_2_X550EM_x	IXGBE_GSCN_2_X550
+#define IXGBE_GSCN_3_X550EM_x	IXGBE_GSCN_3_X550
 #define IXGBE_FACTPS_X550	IXGBE_FACTPS
 #define IXGBE_FACTPS_X550EM_x	IXGBE_FACTPS
 #define IXGBE_FACTPS_BY_MAC(_hw)	IXGBE_FACTPS
@@ -1046,6 +1058,10 @@ struct ixgbe_dmac_config {
 #define IXGBE_GSCL_6_82599	0x11034
 #define IXGBE_GSCL_7_82599	0x11038
 #define IXGBE_GSCL_8_82599	0x1103C
+#define IXGBE_GSCL_5_X540	IXGBE_GSCL_5_82599
+#define IXGBE_GSCL_6_X540	IXGBE_GSCL_6_82599
+#define IXGBE_GSCL_7_X540	IXGBE_GSCL_7_82599
+#define IXGBE_GSCL_8_X540	IXGBE_GSCL_8_82599
 #define IXGBE_PHYADR_82599	0x11040
 #define IXGBE_PHYDAT_82599	0x11044
 #define IXGBE_PHYCTL_82599	0x11048
@@ -1056,6 +1072,14 @@ struct ixgbe_dmac_config {
 #define IXGBE_CIAD_82599	IXGBE_CIAD
 #define IXGBE_CIAA_X540		IXGBE_CIAA
 #define IXGBE_CIAD_X540		IXGBE_CIAD
+#define IXGBE_GSCL_5_X550	0x11810
+#define IXGBE_GSCL_6_X550	0x11814
+#define IXGBE_GSCL_7_X550	0x11818
+#define IXGBE_GSCL_8_X550	0x1181C
+#define IXGBE_GSCL_5_X550EM_x	IXGBE_GSCL_5_X550
+#define IXGBE_GSCL_6_X550EM_x	IXGBE_GSCL_6_X550
+#define IXGBE_GSCL_7_X550EM_x	IXGBE_GSCL_7_X550
+#define IXGBE_GSCL_8_X550EM_x	IXGBE_GSCL_8_X550
 #define IXGBE_CIAA_X550		0x11508
 #define IXGBE_CIAD_X550		0x11510
 #define IXGBE_CIAA_X550EM_x	IXGBE_CIAA_X550
@@ -1391,6 +1415,7 @@ struct ixgbe_dmac_config {
 #define IXGBE_CORECTL_WRITE_CMD		0x00010000
 
 /* Device Type definitions for new protocol MDIO commands */
+#define IXGBE_MDIO_ZERO_DEV_TYPE		0x0
 #define IXGBE_MDIO_PMA_PMD_DEV_TYPE		0x1
 #define IXGBE_MDIO_PCS_DEV_TYPE			0x3
 #define IXGBE_MDIO_PHY_XS_DEV_TYPE		0x4
@@ -1525,7 +1550,8 @@ struct ixgbe_dmac_config {
 #define ATH_PHY_ID	0x03429050
 
 /* PHY Types */
-#define IXGBE_M88E1145_E_PHY_ID	0x01410CD0
+#define IXGBE_M88E1500_E_PHY_ID	0x01410DD0
+#define IXGBE_M88E1543_E_PHY_ID	0x01410EA0
 
 /* Special PHY Init Routine */
 #define IXGBE_PHY_INIT_OFFSET_NL	0x002B
@@ -1637,6 +1663,8 @@ enum {
 #define IXGBE_VT_CTL_POOL_MASK		(0x3F << IXGBE_VT_CTL_POOL_SHIFT)
 
 /* VMOLR bitmasks */
+#define IXGBE_VMOLR_UPE		0x00400000 /* unicast promiscuous */
+#define IXGBE_VMOLR_VPE		0x00800000 /* VLAN promiscuous */
 #define IXGBE_VMOLR_AUPE	0x01000000 /* accept untagged packets */
 #define IXGBE_VMOLR_ROMPE	0x02000000 /* accept packets in MTA tbl */
 #define IXGBE_VMOLR_ROPE	0x04000000 /* accept packets in UC tbl */
@@ -2256,6 +2284,7 @@ enum {
 #define IXGBE_SAN_MAC_ADDR_PORT1_OFFSET		0x3
 #define IXGBE_DEVICE_CAPS_ALLOW_ANY_SFP		0x1
 #define IXGBE_DEVICE_CAPS_FCOE_OFFLOADS		0x2
+#define IXGBE_DEVICE_CAPS_NO_CROSSTALK_WR	(1 << 7)
 #define IXGBE_FW_LESM_PARAMETERS_PTR		0x2
 #define IXGBE_FW_LESM_STATE_1			0x1
 #define IXGBE_FW_LESM_STATE_ENABLED		0x8000 /* LESM Enable bit */
@@ -2718,7 +2747,7 @@ enum {
 #define IXGBE_PVFPSRTYPE(P)	(0x0EA00 + (4 * (P)))
 #define IXGBE_PVFTDBAL(P)	(0x06000 + (0x40 * (P)))
 #define IXGBE_PVFTDBAH(P)	(0x06004 + (0x40 * (P)))
-#define IXGBE_PVFTTDLEN(P)	(0x06008 + (0x40 * (P)))
+#define IXGBE_PVFTDLEN(P)	(0x06008 + (0x40 * (P)))
 #define IXGBE_PVFTDH(P)		(0x06010 + (0x40 * (P)))
 #define IXGBE_PVFTDT(P)		(0x06018 + (0x40 * (P)))
 #define IXGBE_PVFTXDCTL(P)	(0x06028 + (0x40 * (P)))
@@ -2855,7 +2884,6 @@ enum ixgbe_fdir_pballoc_type {
 #define IXGBE_FDIRCMD_TUNNEL_FILTER		0x00800000
 #define IXGBE_FDIR_DROP_QUEUE			127
 
-
 /* Manageablility Host Interface defines */
 #define IXGBE_HI_MAX_BLOCK_BYTE_LENGTH	1792 /* Num of bytes in range */
 #define IXGBE_HI_MAX_BLOCK_DWORD_LENGTH	448 /* Num of dwords in range */
@@ -2900,6 +2928,8 @@ enum ixgbe_fdir_pballoc_type {
 #define FW_INT_PHY_REQ_WRITE		1
 
 /* Host Interface Command Structures */
+
+#pragma pack(push, 1)
 
 struct ixgbe_hic_hdr {
 	u8 cmd;
@@ -2978,17 +3008,18 @@ struct ixgbe_hic_internal_phy_req {
 	struct ixgbe_hic_hdr hdr;
 	u8 port_number;
 	u8 command_type;
-	u16 address;
+	__be16 address;
 	u16 rsv1;
-	u32 write_data;
+	__be32 write_data;
 	u16 pad;
 };
 
 struct ixgbe_hic_internal_phy_resp {
 	struct ixgbe_hic_hdr hdr;
-	u32 read_data;
+	__be32 read_data;
 };
 
+#pragma pack(pop)
 
 /* Transmit Descriptor - Legacy */
 struct ixgbe_legacy_tx_desc {
@@ -3137,12 +3168,12 @@ struct ixgbe_adv_tx_context_desc {
 #define IXGBE_ADVTXD_TUNNEL_TYPE_SHIFT	16 /* Adv Tx Desc Tunnel Type shift */
 #define IXGBE_ADVTXD_OUTERIPCS_SHIFT	17 /* Adv Tx Desc OUTERIPCS Shift */
 #define IXGBE_ADVTXD_TUNNEL_TYPE_NVGRE	1  /* Adv Tx Desc Tunnel Type NVGRE */
-
 /* Autonegotiation advertised speeds */
 typedef u32 ixgbe_autoneg_advertised;
 /* Link speed */
 typedef u32 ixgbe_link_speed;
 #define IXGBE_LINK_SPEED_UNKNOWN	0
+#define IXGBE_LINK_SPEED_10_FULL	0x0004
 #define IXGBE_LINK_SPEED_100_FULL	0x0008
 #define IXGBE_LINK_SPEED_1GB_FULL	0x0020
 #define IXGBE_LINK_SPEED_2_5GB_FULL	0x0400
@@ -3316,7 +3347,6 @@ union ixgbe_atr_hash_dword {
 	__be16 flex_bytes;
 	__be32 dword;
 };
-
 
 #define IXGBE_MVALS_INIT(m)	\
 	IXGBE_CAT(EEC, m),		\
@@ -3513,7 +3543,8 @@ struct ixgbe_bus_info {
 	enum ixgbe_bus_type type;
 
 	u16 func;
-	u16 lan_id;
+	u8 lan_id;
+	u16 instance_id;
 };
 
 /* Flow control parameters */
@@ -3628,7 +3659,6 @@ struct ixgbe_eeprom_operations {
 	s32 (*calc_checksum)(struct ixgbe_hw *);
 };
 
-
 /* Error Codes */
 #define IXGBE_ERR_EEPROM			-1
 #define IXGBE_ERR_EEPROM_CHECKSUM		-2
@@ -3671,7 +3701,6 @@ struct ixgbe_eeprom_operations {
 
 #define IXGBE_NOT_IMPLEMENTED			0x7FFFFFFF
 
-
 #define IXGBE_FUSES0_GROUP(_i)		(0x11158 + ((_i) * 4))
 #define IXGBE_FUSES0_300MHZ		(1 << 5)
 #define IXGBE_FUSES0_REV_MASK		(3 << 6)
@@ -3679,6 +3708,7 @@ struct ixgbe_eeprom_operations {
 #define IXGBE_KRM_PORT_CAR_GEN_CTRL(P)	((P) ? 0x8010 : 0x4010)
 #define IXGBE_KRM_LINK_CTRL_1(P)	((P) ? 0x820C : 0x420C)
 #define IXGBE_KRM_AN_CNTL_1(P)		((P) ? 0x822C : 0x422C)
+#define IXGBE_KRM_SGMII_CTRL(P)		((P) ? 0x82A0 : 0x42A0)
 #define IXGBE_KRM_DSP_TXFFE_STATE_4(P)	((P) ? 0x8634 : 0x4634)
 #define IXGBE_KRM_DSP_TXFFE_STATE_5(P)	((P) ? 0x8638 : 0x4638)
 #define IXGBE_KRM_RX_TRN_LINKUP_CTRL(P)	((P) ? 0x8B00 : 0x4B00)
@@ -3692,6 +3722,8 @@ struct ixgbe_eeprom_operations {
 #define IXGBE_KRM_LINK_CTRL_1_TETH_FORCE_SPEED_MASK	(0x7 << 8)
 #define IXGBE_KRM_LINK_CTRL_1_TETH_FORCE_SPEED_1G	(2 << 8)
 #define IXGBE_KRM_LINK_CTRL_1_TETH_FORCE_SPEED_10G	(4 << 8)
+#define IXGBE_KRM_LINK_CTRL_1_TETH_AN_SGMII_EN		(1 << 12)
+#define IXGBE_KRM_LINK_CTRL_1_TETH_AN_CLAUSE_37_EN	(1 << 13)
 #define IXGBE_KRM_LINK_CTRL_1_TETH_AN_FEC_REQ		(1 << 14)
 #define IXGBE_KRM_LINK_CTRL_1_TETH_AN_CAP_FEC		(1 << 15)
 #define IXGBE_KRM_LINK_CTRL_1_TETH_AN_CAP_KX		(1 << 16)
@@ -3703,6 +3735,9 @@ struct ixgbe_eeprom_operations {
 
 #define IXGBE_KRM_AN_CNTL_1_SYM_PAUSE			(1 << 28)
 #define IXGBE_KRM_AN_CNTL_1_ASM_PAUSE			(1 << 29)
+
+#define IXGBE_KRM_SGMII_CTRL_MAC_TAR_FORCE_100_D	(1 << 12)
+#define IXGBE_KRM_SGMII_CTRL_MAC_TAR_FORCE_10_D		(1 << 19)
 
 #define IXGBE_KRM_DSP_TXFFE_STATE_C0_EN			(1 << 6)
 #define IXGBE_KRM_DSP_TXFFE_STATE_CP1_CN1_EN		(1 << 15)

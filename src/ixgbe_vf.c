@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,11 +16,11 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
 *******************************************************************************/
-
 
 #include "ixgbe_vf.h"
 
@@ -30,46 +30,6 @@
 #ifndef IXGBE_VFREAD_REG
 #define IXGBE_VFREAD_REG IXGBE_READ_REG
 #endif
-
-/**
- *  ixgbevf_update_xcast_mode - Update Multicast mode
- *  @hw: pointer to the HW structure
- *  @netdev: pointer to net device structure
- *  @xcast_mode: new multicast mode
- *
- *  Updates the Multicast Mode of VF.
-**/
-static s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw,
-				     struct net_device *netdev, int xcast_mode)
-{
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
-	u32 msgbuf[2];
-	s32 err;
-
-	switch (hw->api_version) {
-	case ixgbe_mbox_api_12:
-		break;
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	msgbuf[0] = IXGBE_VF_UPDATE_XCAST_MODE;
-	msgbuf[1] = xcast_mode;
-
-	err = mbx->ops.write_posted(hw, msgbuf, 2, 0);
-	if (err)
-		return err;
-
-	err = mbx->ops.read_posted(hw, msgbuf, 2, 0);
-	if (err)
-		return err;
-
-	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
-	if (msgbuf[0] == (IXGBE_VF_UPDATE_XCAST_MODE | IXGBE_VT_MSGTYPE_NACK))
-		return -EPERM;
-
-	return 0;
-}
 
 /**
  *  ixgbe_init_ops_vf - Initialize the pointers for vf
@@ -348,15 +308,16 @@ static s32 ixgbe_mta_vector(struct ixgbe_hw *hw, u8 *mc_addr)
 	return vector;
 }
 
-static void ixgbevf_write_msg_read_ack(struct ixgbe_hw *hw,
-					u32 *msg, u16 size)
+static s32 ixgbevf_write_msg_read_ack(struct ixgbe_hw *hw, u32 *msg,
+				      u32 *retmsg, u16 size)
 {
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
-	u32 retmsg[IXGBE_VFMAILBOX_SIZE];
 	s32 retval = mbx->ops.write_posted(hw, msg, size, 0);
 
-	if (!retval)
-		mbx->ops.read_posted(hw, retmsg, size, 0);
+	if (retval)
+		return retval;
+
+	return mbx->ops.read_posted(hw, retmsg, size, 0);
 }
 
 /**
@@ -388,8 +349,10 @@ s32 ixgbe_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr, u32 vmdq,
 
 	/* if nacked the address was rejected, use "perm_addr" */
 	if (!ret_val &&
-	    (msgbuf[0] == (IXGBE_VF_SET_MAC_ADDR | IXGBE_VT_MSGTYPE_NACK)))
+	    (msgbuf[0] == (IXGBE_VF_SET_MAC_ADDR | IXGBE_VT_MSGTYPE_NACK))) {
 		ixgbe_get_mac_addr_vf(hw, hw->mac.addr);
+		return IXGBE_ERR_MBX;
+	}
 
 	return ret_val;
 }
@@ -441,18 +404,59 @@ s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 }
 
 /**
+ *  ixgbevf_update_xcast_mode - Update Multicast mode
+ *  @hw: pointer to the HW structure
+ *  @xcast_mode: new multicast mode
+ *
+ *  Updates the Multicast Mode of VF.
+ **/
+s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
+{
+	struct ixgbe_mbx_info *mbx = &hw->mbx;
+	u32 msgbuf[2];
+	s32 err;
+
+	switch (hw->api_version) {
+	case ixgbe_mbox_api_12:
+		break;
+	default:
+		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
+	}
+
+	msgbuf[0] = IXGBE_VF_UPDATE_XCAST_MODE;
+	msgbuf[1] = xcast_mode;
+
+	err = mbx->ops.write_posted(hw, msgbuf, 2, 0);
+	if (err)
+		return err;
+
+	err = mbx->ops.read_posted(hw, msgbuf, 2, 0);
+	if (err)
+		return err;
+
+	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
+	if (msgbuf[0] == (IXGBE_VF_UPDATE_XCAST_MODE | IXGBE_VT_MSGTYPE_NACK))
+		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
+	return 0;
+}
+
+/**
  *  ixgbe_set_vfta_vf - Set/Unset vlan filter table address
  *  @hw: pointer to the HW structure
  *  @vlan: 12 bit VLAN ID
  *  @vind: unused by VF drivers
  *  @vlan_on: if true then set bit, else clear bit
+ *  @vlvf_bypass: boolean flag indicating updating default pool is okay
+ *
+ *  Turn on/off specified VLAN in the VLAN filter table.
  **/
-s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind, bool vlan_on)
+s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind,
+		      bool vlan_on, bool vlvf_bypass)
 {
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	u32 msgbuf[2];
 	s32 ret_val;
-	UNREFERENCED_1PARAMETER(vind);
+	UNREFERENCED_2PARAMETER(vind, vlvf_bypass);
 
 	msgbuf[0] = IXGBE_VF_SET_VLAN;
 	msgbuf[1] = vlan;
@@ -647,13 +651,22 @@ out:
  *  @hw: pointer to the HW structure
  *  @max_size: value to assign to max frame size
  **/
-void ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size)
+s32 ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size)
 {
 	u32 msgbuf[2];
+	s32 retval;
 
 	msgbuf[0] = IXGBE_VF_SET_LPE;
 	msgbuf[1] = max_size;
-	ixgbevf_write_msg_read_ack(hw, msgbuf, 2);
+
+	retval = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 2);
+	if (retval)
+		return retval;
+	if ((msgbuf[0] & IXGBE_VF_SET_LPE) &&
+	    (msgbuf[0] & IXGBE_VT_MSGTYPE_NACK))
+		return IXGBE_ERR_MBX;
+
+	return 0;
 }
 
 /**
@@ -699,6 +712,7 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 	/* do nothing if API doesn't support ixgbevf_get_queues */
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_11:
+	case ixgbe_mbox_api_12:
 		break;
 	default:
 		return 0;

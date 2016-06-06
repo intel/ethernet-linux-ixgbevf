@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,6 +16,7 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
@@ -351,18 +352,16 @@ static int ixgbevf_set_eeprom(struct net_device __always_unused *netdev,
 }
 
 static void ixgbevf_get_drvinfo(struct net_device *netdev,
-                              struct ethtool_drvinfo *drvinfo)
+				struct ethtool_drvinfo *drvinfo)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
-	strncpy(drvinfo->driver, ixgbevf_driver_name, 32);
-	strncpy(drvinfo->version, ixgbevf_driver_version, 32);
-
-	strncpy(drvinfo->fw_version, "N/A", 4);
-	strncpy(drvinfo->bus_info, pci_name(adapter->pdev), 32);
-	drvinfo->n_stats = IXGBEVF_STATS_LEN;
-	drvinfo->testinfo_len = IXGBEVF_TEST_LEN;
-	drvinfo->regdump_len = ixgbevf_get_regs_len(netdev);
+	strlcpy(drvinfo->driver, ixgbevf_driver_name, sizeof(drvinfo->driver));
+	strlcpy(drvinfo->version, ixgbevf_driver_version,
+		sizeof(drvinfo->version));
+	strlcpy(drvinfo->fw_version, "N/A", 4);
+	strlcpy(drvinfo->bus_info, pci_name(adapter->pdev),
+		sizeof(drvinfo->bus_info));
 }
 
 static void ixgbevf_get_ringparam(struct net_device *netdev,
@@ -1190,7 +1189,7 @@ static int ixgbevf_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return ret;
 }
 
-static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
+static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
 #ifdef HAVE_ETHTOOL_GET_RXNFC_VOID_RULE_LOCS
 			     __always_unused void *rule_locs)
 #else
@@ -1198,14 +1197,211 @@ static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
 #endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(dev);
-	int ret = -EOPNOTSUPP;
+	int ret;
 
-	if (cmd->cmd == ETHTOOL_GRXFH)
-		ret = ixgbevf_get_rss_hash_opts(adapter, cmd);
+	switch (info->cmd) {
+	case ETHTOOL_GRXRINGS:
+		info->data = adapter->num_rx_queues;
+		break;
+	case ETHTOOL_GRXFH:
+		ret = ixgbevf_get_rss_hash_opts(adapter, info);
+		if (ret)
+			return ret;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
 
-	return ret;
+	return 0;
 }
 #endif /* ETHTOOL_GRXRINGS */
+
+#if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
+/**
+ * ixgbevf_get_reta_locked - get the RSS redirection table (RETA) contents.
+ * @adapter: pointer to the port handle
+ * @reta: buffer to fill with RETA contents.
+ * @num_rx_queues: Number of Rx queues configured for this port
+ *
+ * The "reta" buffer should be big enough to contain 32 registers.
+ *
+ * Returns: 0 on success.
+ *          if API doesn't support this operation - (-EOPNOTSUPP).
+ */
+static int ixgbevf_get_reta_locked(struct ixgbe_hw *hw, u32 *reta,
+				   int num_rx_queues)
+{
+	int err, i, j;
+	u32 msgbuf[IXGBE_VFMAILBOX_SIZE];
+	u32 *hw_reta = &msgbuf[1];
+	u32 mask = 0;
+
+	/* We have to use a mailbox for 82599 and x540 devices only.
+	 * For these devices RETA has 128 entries.
+	 * Also these VFs support up to 4 RSS queues. Therefore PF will compress
+	 * 16 RETA entries in each DWORD giving 2 bits to each entry.
+	 */
+	int dwords = IXGBEVF_82599_RETA_SIZE / 16;
+
+	/* We support the RSS querying for 82599 and x540 devices only.
+	 * Thus return an error if API doesn't support RETA querying or querying
+	 * is not supported for this device type.
+	 */
+	if (hw->api_version != ixgbe_mbox_api_12 ||
+	    hw->mac.type >= ixgbe_mac_X550_vf)
+		return -EOPNOTSUPP;
+
+	msgbuf[0] = IXGBE_VF_GET_RETA;
+
+	err = hw->mbx.ops.write_posted(hw, msgbuf, 1, 0);
+
+	if (err)
+		return err;
+
+	err = hw->mbx.ops.read_posted(hw, msgbuf, dwords + 1, 0);
+
+	if (err)
+		return err;
+
+	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
+
+	/* If the operation has been refused by a PF return -EPERM */
+	if (msgbuf[0] == (IXGBE_VF_GET_RETA | IXGBE_VT_MSGTYPE_NACK))
+		return -EPERM;
+
+	/* If we didn't get an ACK there must have been
+	 * some sort of mailbox error so we should treat it
+	 * as such.
+	 */
+	if (msgbuf[0] != (IXGBE_VF_GET_RETA | IXGBE_VT_MSGTYPE_ACK))
+		return IXGBE_ERR_MBX;
+
+	/* ixgbevf doesn't support more than 2 queues at the moment */
+	if (num_rx_queues > 1)
+		mask = 0x1;
+
+	for (i = 0; i < dwords; i++)
+		for (j = 0; j < 16; j++)
+			reta[i * 16 + j] = (hw_reta[i] >> (2 * j)) & mask;
+
+	return 0;
+}
+
+/**
+ * ixgbevf_get_rss_key_locked - get the RSS Random Key
+ * @hw: pointer to the HW structure
+ * @rss_key: buffer to fill with RSS Hash Key contents.
+ *
+ * The "rss_key" buffer should be big enough to contain 10 registers.
+ *
+ * Returns: 0 on success.
+ *          if API doesn't support this operation - (-EOPNOTSUPP).
+ */
+static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
+{
+	int err;
+	u32 msgbuf[IXGBE_VFMAILBOX_SIZE];
+
+	/* We currently support the RSS Random Key retrieval for 82599 and x540
+	 * devices only.
+	 *
+	 * Thus return an error if API doesn't support RSS Random Key retrieval
+	 * or if the operation is not supported for this device type.
+	 */
+	if (hw->api_version != ixgbe_mbox_api_12 ||
+	    hw->mac.type >= ixgbe_mac_X550_vf)
+		return -EOPNOTSUPP;
+
+	msgbuf[0] = IXGBE_VF_GET_RSS_KEY;
+	err = hw->mbx.ops.write_posted(hw, msgbuf, 1, 0);
+
+	if (err)
+		return err;
+
+	err = hw->mbx.ops.read_posted(hw, msgbuf, 11, 0);
+
+	if (err)
+		return err;
+
+	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
+
+	/* If the operation has been refused by a PF return -EPERM */
+	if (msgbuf[0] == (IXGBE_VF_GET_RETA | IXGBE_VT_MSGTYPE_NACK))
+		return -EPERM;
+
+	/* If we didn't get an ACK there must have been
+	 * some sort of mailbox error so we should treat it
+	 * as such.
+	 */
+	if (msgbuf[0] != (IXGBE_VF_GET_RSS_KEY | IXGBE_VT_MSGTYPE_ACK))
+		return IXGBE_ERR_MBX;
+
+	memcpy(rss_key, msgbuf + 1, IXGBEVF_RSS_HASH_KEY_SIZE);
+
+	return 0;
+}
+
+static u32 ixgbevf_get_rxfh_indir_size(struct net_device *netdev)
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+
+	if (adapter->hw.mac.type >= ixgbe_mac_X550_vf)
+		return IXGBEVF_X550_VFRETA_SIZE;
+
+	return IXGBEVF_82599_RETA_SIZE;
+}
+
+static u32 ixgbevf_get_rxfh_key_size(struct net_device *netdev)
+{
+	return IXGBEVF_RSS_HASH_KEY_SIZE;
+}
+
+#ifdef HAVE_RXFH_HASHFUNC
+static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
+			    u8 *hfunc)
+#else
+static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
+#endif
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	int err = 0;
+
+#ifdef HAVE_RXFH_HASHFUNC
+	if (hfunc)
+		*hfunc = ETH_RSS_HASH_TOP;
+#endif
+
+	if (adapter->hw.mac.type >= ixgbe_mac_X550_vf) {
+		if (key)
+			memcpy(key, adapter->rss_key, sizeof(adapter->rss_key));
+
+		if (indir) {
+			int i;
+
+			for (i = 0; i < IXGBEVF_X550_VFRETA_SIZE; i++)
+				indir[i] = adapter->rss_indir_tbl[i];
+		}
+	} else {
+		/* If neither indirection table nor hash key was requested
+		 *  - just return a success avoiding taking any locks.
+		 */
+		if (!indir && !key)
+			return 0;
+
+		spin_lock_bh(&adapter->mbx_lock);
+		if (indir)
+			err = ixgbevf_get_reta_locked(&adapter->hw, indir,
+						      adapter->num_rx_queues);
+
+		if (!err && key)
+			err = ixgbevf_get_rss_key_locked(&adapter->hw, key);
+
+		spin_unlock_bh(&adapter->mbx_lock);
+	}
+
+	return err;
+}
+#endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 
 static struct ethtool_ops ixgbevf_ethtool_ops = {
 	.get_settings           = ixgbevf_get_settings,
@@ -1221,6 +1417,11 @@ static struct ethtool_ops ixgbevf_ethtool_ops = {
 #ifdef HAVE_ETHTOOL_GET_TS_INFO
 	.get_ts_info		= ethtool_op_get_ts_info,
 #endif /* HAVE_ETHTOOL_GET_TS_INFO */
+#if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
+	.get_rxfh_indir_size	= ixgbevf_get_rxfh_indir_size,
+	.get_rxfh_key_size	= ixgbevf_get_rxfh_key_size,
+	.get_rxfh		= ixgbevf_get_rxfh,
+#endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 #endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 	.get_ringparam          = ixgbevf_get_ringparam,
 	.set_ringparam          = ixgbevf_set_ringparam,
@@ -1262,6 +1463,11 @@ static struct ethtool_ops ixgbevf_ethtool_ops = {
 static const struct ethtool_ops_ext ixgbevf_ethtool_ops_ext = {
 	.size		= sizeof(struct ethtool_ops_ext),
 	.get_ts_info	= ethtool_op_get_ts_info,
+#if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
+	.get_rxfh_indir_size	= ixgbevf_get_rxfh_indir_size,
+	.get_rxfh_key_size	= ixgbevf_get_rxfh_key_size,
+	.get_rxfh		= ixgbevf_get_rxfh,
+#endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 };
 #endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 

@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,6 +16,7 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
@@ -53,7 +54,6 @@
 #define IXGBE_MBVFICR_VFREQ_VF1		0x00000001 /* bit for VF 1 message */
 #define IXGBE_MBVFICR_VFACK_MASK	0xFFFF0000 /* bits for VF acks */
 #define IXGBE_MBVFICR_VFACK_VF1		0x00010000 /* bit for VF 1 ack */
-
 
 /* If it's a IXGBE_VF_* msg then it originates in the VF and is sent to the
  * PF.  The reverse is true if it is IXGBE_PF_*.
@@ -98,14 +98,16 @@ enum ixgbe_pfvf_api_rev {
 /* mailbox API, version 1.1 VF requests */
 #define IXGBE_VF_GET_QUEUES	0x09 /* get queue configuration */
 
+/* mailbox API, version 1.2 VF requests */
+#define IXGBE_VF_GET_RETA      0x0a    /* VF request for RETA */
+#define IXGBE_VF_GET_RSS_KEY	0x0b    /* get RSS key */
+#define IXGBE_VF_UPDATE_XCAST_MODE	0x0c
+
 /* GET_QUEUES return data indices within the mailbox */
 #define IXGBE_VF_TX_QUEUES	1	/* number of Tx queues supported */
 #define IXGBE_VF_RX_QUEUES	2	/* number of Rx queues supported */
 #define IXGBE_VF_TRANS_VLAN	3	/* Indication of port vlan */
 #define IXGBE_VF_DEF_QUEUE	4	/* Default queue offset */
-
-/* mailbox API, version 1.2 VF requests */
-#define IXGBE_VF_UPDATE_XCAST_MODE     0x0c
 
 /* length of permanent address message returned from PF */
 #define IXGBE_VF_PERMADDR_MSG_LEN	4

@@ -1,7 +1,7 @@
 /*******************************************************************************
 
-  Intel 82599 Virtual Function driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
+  Intel(R) 10GbE PCI Express Virtual Function Driver
+  Copyright(c) 1999 - 2016 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -16,13 +16,14 @@
   the file called "COPYING".
 
   Contact Information:
+  Linux NICS <linux.nics@intel.com>
   e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
   Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
 
 *******************************************************************************/
 
-#ifndef __IXGBE_VF_H__
-#define __IXGBE_VF_H__
+#ifndef _IXGBE_VF_H_
+#define _IXGBE_VF_H_
 
 #define IXGBE_VF_IRQ_CLEAR_MASK	7
 #define IXGBE_VF_MAX_TX_QUEUES	8
@@ -106,11 +107,11 @@ struct ixgbe_mac_operations {
 	s32 (*init_rx_addrs)(struct ixgbe_hw *);
 	s32 (*update_mc_addr_list)(struct ixgbe_hw *, u8 *, u32,
 				   ixgbe_mc_addr_itr, bool);
-	s32 (*update_xcast_mode)(struct ixgbe_hw *, struct net_device *, int);
+	s32 (*update_xcast_mode)(struct ixgbe_hw *, int);
 	s32 (*enable_mc)(struct ixgbe_hw *);
 	s32 (*disable_mc)(struct ixgbe_hw *);
 	s32 (*clear_vfta)(struct ixgbe_hw *);
-	s32 (*set_vfta)(struct ixgbe_hw *, u32, u32, bool);
+	s32 (*set_vfta)(struct ixgbe_hw *, u32, u32, bool, bool);
 };
 
 struct ixgbe_mac_info {
@@ -220,8 +221,10 @@ s32 ixgbevf_set_uc_addr_vf(struct ixgbe_hw *hw, u32 index, u8 *addr);
 s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 				 u32 mc_addr_count, ixgbe_mc_addr_itr,
 				 bool clear);
-s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind, bool vlan_on);
-void ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size);
+s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode);
+s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind,
+		      bool vlan_on, bool vlvf_bypass);
+s32 ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size);
 int ixgbevf_negotiate_api_version(struct ixgbe_hw *hw, int api);
 int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 		       unsigned int *default_tc);
