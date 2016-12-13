@@ -52,6 +52,7 @@ s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.ops.get_mac_addr = ixgbe_get_mac_addr_vf;
 	hw->mac.ops.stop_adapter = ixgbe_stop_adapter_vf;
 	hw->mac.ops.get_bus_info = NULL;
+	hw->mac.ops.negotiate_api_version = ixgbevf_negotiate_api_version;
 
 	/* Link */
 	hw->mac.ops.setup_link = ixgbe_setup_mac_link_vf;
@@ -68,6 +69,7 @@ s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.ops.disable_mc = NULL;
 	hw->mac.ops.clear_vfta = NULL;
 	hw->mac.ops.set_vfta = ixgbe_set_vfta_vf;
+	hw->mac.ops.set_rlpml = ixgbevf_rlpml_set_vf;
 
 	hw->mac.max_tx_queues = 1;
 	hw->mac.max_rx_queues = 1;
@@ -331,7 +333,6 @@ static s32 ixgbevf_write_msg_read_ack(struct ixgbe_hw *hw, u32 *msg,
 s32 ixgbe_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr, u32 vmdq,
 		     u32 enable_addr)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	u32 msgbuf[3];
 	u8 *msg_addr = (u8 *)(&msgbuf[1]);
 	s32 ret_val;
@@ -340,10 +341,7 @@ s32 ixgbe_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr, u32 vmdq,
 	memset(msgbuf, 0, 12);
 	msgbuf[0] = IXGBE_VF_SET_MAC_ADDR;
 	memcpy(msg_addr, addr, 6);
-	ret_val = mbx->ops.write_posted(hw, msgbuf, 3, 0);
-
-	if (!ret_val)
-		ret_val = mbx->ops.read_posted(hw, msgbuf, 3, 0);
+	ret_val = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 3);
 
 	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
@@ -412,12 +410,12 @@ s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
  **/
 s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	u32 msgbuf[2];
 	s32 err;
 
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_12:
+	case ixgbe_mbox_api_13:
 		break;
 	default:
 		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
@@ -426,11 +424,7 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 	msgbuf[0] = IXGBE_VF_UPDATE_XCAST_MODE;
 	msgbuf[1] = xcast_mode;
 
-	err = mbx->ops.write_posted(hw, msgbuf, 2, 0);
-	if (err)
-		return err;
-
-	err = mbx->ops.read_posted(hw, msgbuf, 2, 0);
+	err = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 2);
 	if (err)
 		return err;
 
@@ -453,7 +447,6 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind,
 		      bool vlan_on, bool vlvf_bypass)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	u32 msgbuf[2];
 	s32 ret_val;
 	UNREFERENCED_2PARAMETER(vind, vlvf_bypass);
@@ -463,10 +456,7 @@ s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind,
 	/* Setting the 8 bit field MSG INFO to TRUE indicates "add" */
 	msgbuf[0] |= vlan_on << IXGBE_VT_MSGINFO_SHIFT;
 
-	ret_val = mbx->ops.write_posted(hw, msgbuf, 2, 0);
-	if (!ret_val)
-		ret_val = mbx->ops.read_posted(hw, msgbuf, 1, 0);
-
+	ret_val = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 2);
 	if (!ret_val && (msgbuf[0] & IXGBE_VT_MSGTYPE_ACK))
 		return 0;
 
@@ -513,8 +503,7 @@ s32 ixgbe_get_mac_addr_vf(struct ixgbe_hw *hw, u8 *mac_addr)
 
 s32 ixgbevf_set_uc_addr_vf(struct ixgbe_hw *hw, u32 index, u8 *addr)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
-	u32 msgbuf[3];
+	u32 msgbuf[3], msgbuf_chk;
 	u8 *msg_addr = (u8 *)(&msgbuf[1]);
 	s32 ret_val;
 
@@ -527,18 +516,17 @@ s32 ixgbevf_set_uc_addr_vf(struct ixgbe_hw *hw, u32 index, u8 *addr)
 	 */
 	msgbuf[0] |= index << IXGBE_VT_MSGINFO_SHIFT;
 	msgbuf[0] |= IXGBE_VF_SET_MACVLAN;
+	msgbuf_chk = msgbuf[0];
 	if (addr)
 		memcpy(msg_addr, addr, 6);
-	ret_val = mbx->ops.write_posted(hw, msgbuf, 3, 0);
 
-	if (!ret_val)
-		ret_val = mbx->ops.read_posted(hw, msgbuf, 3, 0);
+	ret_val = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 3);
+	if (!ret_val) {
+		msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
-	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
-
-	if (!ret_val)
-		if (msgbuf[0] == (IXGBE_VF_SET_MACVLAN | IXGBE_VT_MSGTYPE_NACK))
-			ret_val = IXGBE_ERR_OUT_OF_MEM;
+		if (msgbuf[0] == (msgbuf_chk | IXGBE_VT_MSGTYPE_NACK))
+			return IXGBE_ERR_OUT_OF_MEM;
+	}
 
 	return ret_val;
 }
@@ -608,13 +596,29 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	switch (links_reg & IXGBE_LINKS_SPEED_82599) {
 	case IXGBE_LINKS_SPEED_10G_82599:
 		*speed = IXGBE_LINK_SPEED_10GB_FULL;
+		if (hw->mac.type >= ixgbe_mac_X550) {
+			if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
+				*speed = IXGBE_LINK_SPEED_2_5GB_FULL;
+		}
 		break;
 	case IXGBE_LINKS_SPEED_1G_82599:
 		*speed = IXGBE_LINK_SPEED_1GB_FULL;
 		break;
 	case IXGBE_LINKS_SPEED_100_82599:
 		*speed = IXGBE_LINK_SPEED_100_FULL;
+		if (hw->mac.type == ixgbe_mac_X550) {
+			if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
+				*speed = IXGBE_LINK_SPEED_5GB_FULL;
+		}
 		break;
+	case IXGBE_LINKS_SPEED_10_X550EM_A:
+		*speed = IXGBE_LINK_SPEED_UNKNOWN;
+		/* Since Reserved in older MAC's */
+		if (hw->mac.type >= ixgbe_mac_X550)
+			*speed = IXGBE_LINK_SPEED_10_FULL;
+		break;
+	default:
+		*speed = IXGBE_LINK_SPEED_UNKNOWN;
 	}
 
 	/* if the read failed it could just be a mailbox collision, best wait
@@ -683,11 +687,8 @@ int ixgbevf_negotiate_api_version(struct ixgbe_hw *hw, int api)
 	msg[0] = IXGBE_VF_API_NEGOTIATE;
 	msg[1] = api;
 	msg[2] = 0;
-	err = hw->mbx.ops.write_posted(hw, msg, 3, 0);
 
-	if (!err)
-		err = hw->mbx.ops.read_posted(hw, msg, 3, 0);
-
+	err = ixgbevf_write_msg_read_ack(hw, msg, msg, 3);
 	if (!err) {
 		msg[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
@@ -713,6 +714,7 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_11:
 	case ixgbe_mbox_api_12:
+	case ixgbe_mbox_api_13:
 		break;
 	default:
 		return 0;
@@ -721,11 +723,8 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 	/* Fetch queue configuration from the PF */
 	msg[0] = IXGBE_VF_GET_QUEUES;
 	msg[1] = msg[2] = msg[3] = msg[4] = 0;
-	err = hw->mbx.ops.write_posted(hw, msg, 5, 0);
 
-	if (!err)
-		err = hw->mbx.ops.read_posted(hw, msg, 5, 0);
-
+	err = ixgbevf_write_msg_read_ack(hw, msg, msg, 5);
 	if (!err) {
 		msg[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 

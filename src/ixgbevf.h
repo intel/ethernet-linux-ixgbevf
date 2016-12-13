@@ -43,6 +43,9 @@
 
 #include "ixgbe_type.h"
 #include "ixgbe_vf.h"
+#if IS_ENABLED(CONFIG_PCI_HYPERV)
+#include "ixgbe_hv_vf.h"
+#endif
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 #include <net/busy_poll.h>
@@ -396,9 +399,6 @@ struct ixgbevf_adapter {
 
 	u32 flags;
 #define IXGBE_FLAG_RX_CSUM_ENABLED		(u32)(1)
-#define IXGBEVF_FLAG_RESET_REQUESTED		(u32)(1 << 1)
-
-#define IXGBEVF_FLAG_QUEUE_RESET_REQUESTED	(u32)(1 << 3)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP		(u32)(1 << 4)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP		(u32)(1 << 5)
 
@@ -476,6 +476,8 @@ enum ixbgevf_state_t {
 	__IXGBEVF_REMOVE,
 	__IXGBEVF_SERVICE_SCHED,
 	__IXGBEVF_SERVICE_INITED,
+	__IXGBEVF_RESET_REQUESTED,
+	__IXGBEVF_QUEUE_RESET_REQUESTED,
 };
 
 enum ixgbevf_xcast_modes {
@@ -534,9 +536,10 @@ static inline void __ew32(struct ixgbe_hw *hw, unsigned long reg, u32 val)
 #define ew32(reg,val)	IXGBE_WRITE_REG(hw, IXGBE_##reg, (val))
 #define e1e_flush()	er32(STATUS)
 
-static inline void ixgbevf_write_tail(struct ixgbevf_ring *ring, u32 value)
+#if IS_ENABLED(CONFIG_BQL) || defined(HAVE_SKB_XMIT_MORE)
+static inline struct netdev_queue *txring_txq(const struct ixgbevf_ring *ring)
 {
-	writel(value, ring->tail);
+	return netdev_get_tx_queue(ring->netdev, ring->queue_index);
 }
-
+#endif
 #endif /* _IXGBEVF_H_ */

@@ -32,13 +32,12 @@ obj-$(CONFIG_IXGBE) += ixgbevf.o
 
 define ixgbevf-y
 	ixgbevf_main.o
-	ixgbevf_param.o
 	ixgbevf_ethtool.o
 	ixgbe_vf.o
 	ixgbe_mbx.o
 endef
 ixgbevf-y := $(strip ${ixgbevf-y})
-
+ixgbevf-${CONFIG_PCI_HYPERV:m=y} += ixgbe_hv_vf.o
 ixgbevf-y += kcompat.o
 
 else	# ifneq($(KERNELRELEASE),)

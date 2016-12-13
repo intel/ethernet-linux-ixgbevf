@@ -128,11 +128,22 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 		case IXGBE_LINK_SPEED_10GB_FULL:
 			ethtool_cmd_speed_set(ecmd, SPEED_10000);
 			break;
+		case IXGBE_LINK_SPEED_5GB_FULL:
+			ethtool_cmd_speed_set(ecmd, 5000);
+			break;
+#ifdef SUPPORTED_2500baseX_Full
+		case IXGBE_LINK_SPEED_2_5GB_FULL:
+			ethtool_cmd_speed_set(ecmd, SPEED_2500);
+			break;
+#endif /* SUPPORTED_2500baseX_Full */
 		case IXGBE_LINK_SPEED_1GB_FULL:
 			ethtool_cmd_speed_set(ecmd, SPEED_1000);
 			break;
 		case IXGBE_LINK_SPEED_100_FULL:
 			ethtool_cmd_speed_set(ecmd, SPEED_100);
+			break;
+		case IXGBE_LINK_SPEED_10_FULL:
+			ethtool_cmd_speed_set(ecmd, SPEED_10);
 			break;
 		}
 		ecmd->duplex = DUPLEX_FULL;

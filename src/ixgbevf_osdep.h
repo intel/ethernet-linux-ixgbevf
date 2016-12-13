@@ -127,5 +127,12 @@ enum {
 	uninitialized_var(_r);				\
 	uninitialized_var(_s);				\
 } while (0)
+#define UNREFERENCED_5PARAMETER(_p, _q, _r, _s, _t) do {	\
+	uninitialized_var(_p);					\
+	uninitialized_var(_q);					\
+	uninitialized_var(_r);					\
+	uninitialized_var(_s);					\
+	uninitialized_var(_t);					\
+} while (0)
 
 #endif /* _IXGBEVF_OSDEP_H_ */
