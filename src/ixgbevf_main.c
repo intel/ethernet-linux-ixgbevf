@@ -56,7 +56,7 @@
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(3.4.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.0.3) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -3139,6 +3139,10 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 		ether_addr_copy(hw->mac.addr, netdev->dev_addr);
 		ether_addr_copy(hw->mac.perm_addr, netdev->dev_addr);
 	}
+
+	/* Enable dynamic interrupt throttling rates */
+	adapter->rx_itr_setting = 1;
+	adapter->tx_itr_setting = 1;
 
 	/* set default ring sizes */
 	adapter->tx_ring_count = IXGBEVF_DEFAULT_TXD;

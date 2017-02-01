@@ -55,6 +55,9 @@
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
 
+#ifndef NSEC_PER_MSEC
+#define NSEC_PER_MSEC 1000000L
+#endif
 #include <net/ipv6.h>
 /* UTS_RELEASE is in a different header starting in kernel 2.6.18 */
 #ifndef UTS_RELEASE
@@ -853,7 +856,7 @@ struct _kc_ethtool_pauseparam {
   #endif
 #elif (LINUX_VERSION_CODE == KERNEL_VERSION(3,12,28))
 /* SLES12 GA is 3.12.28-4
- * kernel updates 3.12.xx-<33 thru 52>[.yy] */
+ * kernel updates 3.12.xx-<33 through 52>[.yy] */
 #define SLE_VERSION_CODE SLE_VERSION(12,0,0)
 #elif (LINUX_VERSION_CODE == KERNEL_VERSION(3,12,49))
 /* SLES12 SP1 GA is 3.12.49-11
@@ -3333,9 +3336,12 @@ static inline int _kc_netif_set_real_num_tx_queues(struct net_device __always_un
 #if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0))
 #define HAVE_IRQ_AFFINITY_HINT
 #endif
+struct device_node;
 #else /* < 2.6.35 */
+#define HAVE_STRUCT_DEVICE_OF_NODE
 #define HAVE_PM_QOS_REQUEST_LIST
 #define HAVE_IRQ_AFFINITY_HINT
+#include <linux/of.h>
 #endif /* < 2.6.35 */
 
 /*****************************************************************************/
@@ -3697,6 +3703,19 @@ static inline int _kc_kstrtol_from_user(const char __user *s, size_t count,
 #ifndef ETH_P_8021AD
 #define ETH_P_8021AD	0x88A8
 #endif
+
+/* Stub definition for !CONFIG_OF is introduced later */
+#ifdef CONFIG_OF
+static inline struct device_node *
+pci_device_to_OF_node(struct pci_dev __maybe_unused *pdev)
+{
+#ifdef HAVE_STRUCT_DEVICE_OF_NODE
+	return pdev ? pdev->dev.of_node : NULL;
+#else
+	return NULL;
+#endif /* !HAVE_STRUCT_DEVICE_OF_NODE */
+}
+#endif /* CONFIG_OF */
 #else /* < 3.1.0 */
 #ifndef HAVE_DCBNL_IEEE_DELAPP
 #define HAVE_DCBNL_IEEE_DELAPP
@@ -3942,6 +3961,10 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0) )
 
+#ifndef BITS_PER_LONG_LONG
+#define BITS_PER_LONG_LONG 64
+#endif
+
 #ifndef ether_addr_equal
 static inline bool __kc_ether_addr_equal(const u8 *addr1, const u8 *addr2)
 {
@@ -3949,12 +3972,6 @@ static inline bool __kc_ether_addr_equal(const u8 *addr1, const u8 *addr2)
 }
 #define ether_addr_equal(_addr1, _addr2) __kc_ether_addr_equal((_addr1),(_addr2))
 #endif
-
-static inline struct device_node *
-pci_device_to_OF_node(struct pci_dev __always_unused *pdev)
-{
-	return NULL;
-}
 
 static inline int of_get_phy_mode(struct device_node __always_unused *np)
 {
@@ -4829,6 +4846,7 @@ static inline struct timespec timespec64_to_timespec(const struct timespec64 ts6
 
 #else
 #define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
+#include <linux/time64.h>
 #endif /* 3.17.0 */
 
 /*****************************************************************************/
@@ -4985,6 +5003,16 @@ static inline struct sk_buff *__kc_napi_alloc_skb(struct napi_struct *napi, unsi
 #define HAVE_INCLUDE_LINUX_TIMECOUNTER_H
 #define HAVE_NDO_BRIDGE_SET_DEL_LINK_FLAGS
 #endif /* 3.20.0 */
+
+/*****************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0) )
+/* Definition for CONFIG_OF was introduced earlier */
+#if !defined(CONFIG_OF) && \
+    !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
+static inline struct device_node *
+pci_device_to_OF_node(const struct pci_dev __always_unused *pdev) { return NULL; }
+#endif /* !CONFIG_OF && RHEL < 7.3 */
+#endif /* < 4.0 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0) )
@@ -5159,7 +5187,11 @@ struct udp_tunnel_info {
 };
 
 static inline int
+#ifdef HAVE_NON_CONST_PCI_DRIVER_NAME
+pci_request_io_regions(struct pci_dev *pdev, char *name)
+#else
 pci_request_io_regions(struct pci_dev *pdev, const char *name)
+#endif
 {
 	return pci_request_selected_regions(pdev,
 			    pci_select_bars(pdev, IORESOURCE_IO), name);
@@ -5173,7 +5205,11 @@ pci_release_io_regions(struct pci_dev *pdev)
 }
 
 static inline int
+#ifdef HAVE_NON_CONST_PCI_DRIVER_NAME
+pci_request_mem_regions(struct pci_dev *pdev, char *name)
+#else
 pci_request_mem_regions(struct pci_dev *pdev, const char *name)
+#endif
 {
 	return pci_request_selected_regions(pdev,
 			    pci_select_bars(pdev, IORESOURCE_MEM), name);
