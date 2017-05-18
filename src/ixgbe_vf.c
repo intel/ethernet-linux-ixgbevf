@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2016 Intel Corporation.
+  Copyright(c) 1999 - 2017 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -415,6 +415,10 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_12:
+		/* New modes were introduced in 1.3 version */
+		if (xcast_mode > IXGBEVF_XCAST_MODE_ALLMULTI)
+			return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
+		/* Fall through */
 	case ixgbe_mbox_api_13:
 		break;
 	default:

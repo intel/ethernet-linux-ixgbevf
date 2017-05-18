@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2016 Intel Corporation.
+  Copyright(c) 1999 - 2017 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -98,18 +98,31 @@ static const char ixgbe_gstrings_test[][ETH_GSTRING_LEN] = {
 #define IXGBEVF_TEST_LEN (sizeof(ixgbe_gstrings_test) / ETH_GSTRING_LEN)
 #endif /* ETHTOOL_TEST */
 
+#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+static int ixgbevf_get_link_ksettings(struct net_device *netdev,
+				      struct ethtool_link_ksettings *cmd)
+#else
 static int ixgbevf_get_settings(struct net_device *netdev,
 				struct ethtool_cmd *ecmd)
+#endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 link_speed = 0;
 	bool link_up;
 
+#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+	ethtool_link_ksettings_zero_link_mode(cmd, supported);
+	ethtool_link_ksettings_add_link_mode(cmd, supported,
+					     10000baseT_Full);
+	cmd->base.autoneg = AUTONEG_DISABLE;
+	cmd->base.port = -1;
+#else
 	ecmd->supported = SUPPORTED_10000baseT_Full;
 	ecmd->autoneg = AUTONEG_DISABLE;
 	ecmd->transceiver = XCVR_DUMMY1;
 	ecmd->port = -1;
+#endif
 
 	if (!in_interrupt()) {
 		hw->mac.get_link_status = 1;
@@ -124,39 +137,57 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 	}
 
 	if (link_up) {
+		__u32 speed = SPEED_10000;
+
 		switch(link_speed) {
 		case IXGBE_LINK_SPEED_10GB_FULL:
-			ethtool_cmd_speed_set(ecmd, SPEED_10000);
+			speed = SPEED_10000;
 			break;
 		case IXGBE_LINK_SPEED_5GB_FULL:
-			ethtool_cmd_speed_set(ecmd, 5000);
+			speed = SPEED_5000;
 			break;
 #ifdef SUPPORTED_2500baseX_Full
 		case IXGBE_LINK_SPEED_2_5GB_FULL:
-			ethtool_cmd_speed_set(ecmd, SPEED_2500);
+			speed = SPEED_2500;
 			break;
 #endif /* SUPPORTED_2500baseX_Full */
 		case IXGBE_LINK_SPEED_1GB_FULL:
-			ethtool_cmd_speed_set(ecmd, SPEED_1000);
+			speed = SPEED_1000;
 			break;
 		case IXGBE_LINK_SPEED_100_FULL:
-			ethtool_cmd_speed_set(ecmd, SPEED_100);
+			speed = SPEED_100;
 			break;
 		case IXGBE_LINK_SPEED_10_FULL:
-			ethtool_cmd_speed_set(ecmd, SPEED_10);
+			speed = SPEED_10;
 			break;
 		}
+
+#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+		cmd->base.speed = speed;
+		cmd->base.duplex = DUPLEX_FULL;
+	} else {
+		cmd->base.speed = SPEED_UNKNOWN;
+		cmd->base.duplex = DUPLEX_UNKNOWN;
+	}
+#else
+		ethtool_cmd_speed_set(ecmd, speed);
 		ecmd->duplex = DUPLEX_FULL;
 	} else {
 		ethtool_cmd_speed_set(ecmd, SPEED_UNKNOWN);
-		ecmd->duplex = -1;
+		ecmd->duplex = DUPLEX_UNKNOWN;
 	}
+#endif
 
 	return 0;
 }
 
+#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+static int ixgbevf_set_link_ksettings(struct net_device __always_unused *netdev,
+		       const struct ethtool_link_ksettings __always_unused *cmd)
+#else
 static int ixgbevf_set_settings(struct net_device __always_unused *netdev,
 				struct ethtool_cmd __always_unused *ecmd)
+#endif
 {
 	return -EINVAL;
 }
@@ -580,11 +611,6 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		if (!ring) {
 			data[i++] = 0;
 			data[i++] = 0;
-#ifdef BP_EXTENDED_STATS
-			data[i++] = 0;
-			data[i++] = 0;
-			data[i++] = 0;
-#endif
 			continue;
 		}
 
@@ -598,12 +624,6 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
 #endif
 		i += 2;
-#ifdef BP_EXTENDED_STATS
-		data[i] = ring->stats.yields;
-		data[i+1] = ring->stats.misses;
-		data[i+2] = ring->stats.cleaned;
-		i += 3;
-#endif
 	}
 
 	/* populate Rx queue data */
@@ -612,11 +632,6 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		if (!ring) {
 			data[i++] = 0;
 			data[i++] = 0;
-#ifdef BP_EXTENDED_STATS
-			data[i++] = 0;
-			data[i++] = 0;
-			data[i++] = 0;
-#endif
 			continue;
 		}
 
@@ -630,12 +645,6 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
 #endif
 		i += 2;
-#ifdef BP_EXTENDED_STATS
-		data[i] = ring->stats.yields;
-		data[i+1] = ring->stats.misses;
-		data[i+2] = ring->stats.cleaned;
-		i += 3;
-#endif
 	}
 }
 
@@ -663,28 +672,12 @@ static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 			p += ETH_GSTRING_LEN;
 			sprintf(p, "tx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
-#ifdef BP_EXTENDED_STATS
-			sprintf(p, "tx_queue_%u_bp_napi_yield", i);
-			p += ETH_GSTRING_LEN;
-			sprintf(p, "tx_queue_%u_bp_misses", i);
-			p += ETH_GSTRING_LEN;
-			sprintf(p, "tx_queue_%u_bp_cleaned", i);
-			p += ETH_GSTRING_LEN;
-#endif /* BP_EXTENDED_STATS */
 		}
 		for (i = 0; i < adapter->num_rx_queues; i++) {
 			sprintf(p, "rx_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
 			sprintf(p, "rx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
-#ifdef BP_EXTENDED_STATS
-			sprintf(p, "rx_queue_%u_bp_poll_yield", i);
-			p += ETH_GSTRING_LEN;
-			sprintf(p, "rx_queue_%u_bp_misses", i);
-			p += ETH_GSTRING_LEN;
-			sprintf(p, "rx_queue_%u_bp_cleaned", i);
-			p += ETH_GSTRING_LEN;
-#endif /* BP_EXTENDED_STATS */
 		}
 		break;
 	}
@@ -1258,9 +1251,14 @@ static int ixgbevf_get_reta_locked(struct ixgbe_hw *hw, u32 *reta,
 	 * Thus return an error if API doesn't support RETA querying or querying
 	 * is not supported for this device type.
 	 */
-	if (hw->api_version != ixgbe_mbox_api_12 ||
-	    hw->mac.type >= ixgbe_mac_X550_vf)
+	switch (hw->api_version) {
+	case ixgbe_mbox_api_13:
+	case ixgbe_mbox_api_12:
+		if (hw->mac.type >= ixgbe_mac_X550_vf)
+			break;
+	default:
 		return -EOPNOTSUPP;
+	}
 
 	msgbuf[0] = IXGBE_VF_GET_RETA;
 
@@ -1319,9 +1317,14 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	 * Thus return an error if API doesn't support RSS Random Key retrieval
 	 * or if the operation is not supported for this device type.
 	 */
-	if (hw->api_version != ixgbe_mbox_api_12 ||
-	    hw->mac.type >= ixgbe_mac_X550_vf)
+	switch (hw->api_version) {
+	case ixgbe_mbox_api_13:
+	case ixgbe_mbox_api_12:
+		if (hw->mac.type >= ixgbe_mac_X550_vf)
+			break;
+	default:
 		return -EOPNOTSUPP;
+	}
 
 	msgbuf[0] = IXGBE_VF_GET_RSS_KEY;
 	err = hw->mbx.ops.write_posted(hw, msgbuf, 1, 0);
@@ -1415,8 +1418,13 @@ static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 #endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 
 static struct ethtool_ops ixgbevf_ethtool_ops = {
+#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+	.get_link_ksettings	= ixgbevf_get_link_ksettings,
+	.set_link_ksettings	= ixgbevf_set_link_ksettings,
+#else
 	.get_settings           = ixgbevf_get_settings,
 	.set_settings           = ixgbevf_set_settings,
+#endif
 	.get_drvinfo            = ixgbevf_get_drvinfo,
 	.get_regs_len           = ixgbevf_get_regs_len,
 	.get_regs               = ixgbevf_get_regs,

@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2016 Intel Corporation.
+  Copyright(c) 1999 - 2017 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -56,12 +56,12 @@
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.0.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.1.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2016 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2017 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -594,7 +594,7 @@ static void ixgbevf_receive_skb(struct ixgbevf_q_vector *q_vector,
 static void ixgbevf_rx_skb(struct ixgbevf_q_vector *q_vector,
 			   struct sk_buff *skb)
 {
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	skb_mark_napi_id(skb, &q_vector->napi);
 
 	if (ixgbevf_qv_busy_polling(q_vector) || q_vector->netpoll_rx) {
@@ -602,11 +602,11 @@ static void ixgbevf_rx_skb(struct ixgbevf_q_vector *q_vector,
 		/* exit early if we busy polled */
 		return;
 	}
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 #ifdef HAVE_VLAN_RX_REGISTER
 	ixgbevf_receive_skb(q_vector, skb);
 #else
-#ifndef CONFIG_NET_RX_BUSY_POLL
+#ifndef HAVE_NDO_BUSY_POLL
 	if (q_vector->netpoll_rx)
 		netif_rx(skb);
 	else
@@ -1286,7 +1286,7 @@ static int ixgbevf_poll(struct napi_struct *napi, int budget)
 		container_of(napi, struct ixgbevf_q_vector, napi);
 	struct ixgbevf_adapter *adapter = q_vector->adapter;
 	struct ixgbevf_ring *ring;
-	int per_ring_budget;
+	int per_ring_budget, work_done = 0;
 	bool clean_complete = true;
 
 	ixgbevf_for_each_ring(ring, q_vector->tx)
@@ -1294,7 +1294,7 @@ static int ixgbevf_poll(struct napi_struct *napi, int budget)
 
 	if (budget <= 0)
 		return budget;
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	if (test_bit(NAPI_STATE_NPSVC, &napi->state))
 		return budget;
 
@@ -1309,12 +1309,14 @@ static int ixgbevf_poll(struct napi_struct *napi, int budget)
 	else
 		per_ring_budget = budget;
 
-	ixgbevf_for_each_ring(ring, q_vector->rx)
-		clean_complete &= (ixgbevf_clean_rx_irq(q_vector, ring,
-							per_ring_budget)
-				   < per_ring_budget);
+	ixgbevf_for_each_ring(ring, q_vector->rx) {
+		int cleaned = ixgbevf_clean_rx_irq(q_vector, ring,
+						   per_ring_budget);
+		work_done += cleaned;
+		clean_complete &= (cleaned < per_ring_budget);
+	}
 
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	ixgbevf_qv_unlock_napi(q_vector);
 #endif
 
@@ -1327,7 +1329,7 @@ static int ixgbevf_poll(struct napi_struct *napi, int budget)
 	if (!clean_complete)
 		return budget;
 	/* all work done, exit the polling mode */
-	napi_complete(napi);
+	napi_complete_done(napi, work_done);
 	if (adapter->rx_itr_setting == 1)
 		ixgbevf_set_itr(q_vector);
 	if (!test_bit(__IXGBEVF_DOWN, &adapter->state))
@@ -1357,7 +1359,7 @@ void ixgbevf_write_eitr(struct ixgbevf_q_vector *q_vector)
 	IXGBE_WRITE_REG(hw, IXGBE_VTEITR(v_idx), itr_reg);
 }
 
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 /* must be called with local_bh_disable()d */
 static int ixgbevf_busy_poll_recv(struct napi_struct *napi)
 {
@@ -1375,12 +1377,6 @@ static int ixgbevf_busy_poll_recv(struct napi_struct *napi)
 
 	ixgbevf_for_each_ring(ring, q_vector->rx) {
 		found = ixgbevf_clean_rx_irq(q_vector, ring, 4);
-#ifdef BP_EXTENDED_STATS
-		if (found)
-			ring->stats.cleaned += found;
-		else
-			ring->stats.misses++;
-#endif
 		if (found)
 			break;
 	}
@@ -1389,7 +1385,7 @@ static int ixgbevf_busy_poll_recv(struct napi_struct *napi)
 
 	return found;
 }
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 
 /*
  * ixgbevf_set_ivar - set IVAR registers - maps interrupt causes to vectors
@@ -2247,9 +2243,15 @@ static void ixgbevf_set_rx_mode(struct net_device *netdev)
 	u8 *addr_list = NULL;
 	int addr_count = 0;
 
-	xcast_mode = (flags & IFF_ALLMULTI) ? IXGBEVF_XCAST_MODE_ALLMULTI :
-		     (flags & (IFF_BROADCAST | IFF_MULTICAST)) ?
-		     IXGBEVF_XCAST_MODE_MULTI : IXGBEVF_XCAST_MODE_NONE;
+	/* request the most inclusive mode we need */
+	if (flags & IFF_PROMISC)
+		xcast_mode = IXGBEVF_XCAST_MODE_PROMISC;
+	else if (flags & IFF_ALLMULTI)
+		xcast_mode = IXGBEVF_XCAST_MODE_ALLMULTI;
+	else if (flags & (IFF_BROADCAST | IFF_MULTICAST))
+		xcast_mode = IXGBEVF_XCAST_MODE_MULTI;
+	else
+		xcast_mode = IXGBEVF_XCAST_MODE_NONE;
 
 	/* reprogram multicast list */
 	addr_count = netdev_mc_count(netdev);
@@ -2284,7 +2286,7 @@ static void ixgbevf_napi_enable_all(struct ixgbevf_adapter *adapter)
 	int q_idx;
 
 	for (q_idx = 0; q_idx < adapter->num_q_vectors; q_idx++) {
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 		ixgbevf_qv_init_lock(adapter->q_vector[q_idx]);
 #endif
 		napi_enable(&adapter->q_vector[q_idx]->napi);
@@ -2297,12 +2299,12 @@ static void ixgbevf_napi_disable_all(struct ixgbevf_adapter *adapter)
 
 	for (q_idx = 0; q_idx < adapter->num_q_vectors; q_idx++) {
 		napi_disable(&adapter->q_vector[q_idx]->napi);
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 		while(!ixgbevf_qv_disable(adapter->q_vector[q_idx])) {
 			pr_info("QV %d locked\n", q_idx);
 			usleep_range(1000, 20000);
 		}
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 	}
 }
 
@@ -2404,7 +2406,8 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_12,
+	int api[] = { ixgbe_mbox_api_13,
+		      ixgbe_mbox_api_12,
 		      ixgbe_mbox_api_11,
 		      ixgbe_mbox_api_10,
 		      ixgbe_mbox_api_unknown };
@@ -2726,6 +2729,7 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 		switch (hw->api_version) {
 		case ixgbe_mbox_api_11:
 		case ixgbe_mbox_api_12:
+		case ixgbe_mbox_api_13:
 			adapter->num_rx_queues = rss;
 #ifdef HAVE_TX_MQ
 			adapter->num_tx_queues = rss;
@@ -2874,9 +2878,11 @@ static int ixgbevf_alloc_q_vector(struct ixgbevf_adapter *adapter, int v_idx,
 		/* push pointer to next ring */
 		ring++;
 	}
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifndef HAVE_NETIF_NAPI_ADD_CALLS_NAPI_HASH_ADD
+#ifdef HAVE_NDO_BUSY_POLL
 
 	napi_hash_add(&q_vector->napi);
+#endif
 #endif
 
 	return 0;
@@ -2902,7 +2908,7 @@ static void ixgbevf_free_q_vector(struct ixgbevf_adapter *adapter, int v_idx)
 		adapter->rx_ring[ring->queue_index] = NULL;
 
 	adapter->q_vector[v_idx] = NULL;
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	napi_hash_del(&q_vector->napi);
 #endif
 	netif_napi_del(&q_vector->napi);
@@ -4353,10 +4359,12 @@ static int ixgbevf_change_mtu(struct net_device *netdev, int new_mtu)
 	int max_frame = new_mtu + ETH_HLEN + ETH_FCS_LEN;
 	int ret;
 
+#ifndef HAVE_NETDEVICE_MIN_MAX_MTU
 	/* MTU < 68 is an error and causes problems on some kernels */
 	if ((new_mtu < 68) || (max_frame > IXGBE_MAX_JUMBO_FRAME_SIZE))
 		return -EINVAL;
 
+#endif
 	spin_lock_bh(&adapter->mbx_lock);
 
 	/* notify the PF of our intent to use this size of frame */
@@ -4493,8 +4501,13 @@ static void ixgbevf_shutdown(struct pci_dev *pdev)
 #endif /* USE_REBOOT_NOTIFIER */
 
 #ifdef HAVE_NDO_GET_STATS64
+#ifdef HAVE_VOID_NDO_GET_STATS64
+static void ixgbevf_get_stats64(struct net_device *netdev,
+				struct rtnl_link_stats64 *stats)
+#else
 static struct rtnl_link_stats64 *ixgbevf_get_stats64(struct net_device *netdev,
 						struct rtnl_link_stats64 *stats)
+#endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	unsigned int start;
@@ -4528,7 +4541,9 @@ static struct rtnl_link_stats64 *ixgbevf_get_stats64(struct net_device *netdev,
 	}
 	rcu_read_unlock();
 
+#ifndef HAVE_VOID_NDO_GET_STATS64
 	return stats;
+#endif
 }
 #else /* HAVE_NDO_GET_STATS64 */
 /**
@@ -4601,9 +4616,9 @@ static const struct net_device_ops ixgbevf_netdev_ops = {
 	.ndo_vlan_rx_kill_vid	= ixgbevf_vlan_rx_kill_vid,
 #endif
 #ifndef HAVE_RHEL6_NET_DEVICE_EXTENDED
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	.ndo_busy_poll		= ixgbevf_busy_poll_recv,
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 #endif /* !HAVE_RHEL6_NET_DEVICE_EXTENDED */
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= ixgbevf_netpoll,
@@ -4645,9 +4660,9 @@ static void ixgbevf_assign_netdev_ops(struct net_device *dev)
 #endif /* HAVE_NET_DEVICE_OPS */
 
 #ifdef HAVE_RHEL6_NET_DEVICE_EXTENDED
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	netdev_extended(dev)->ndo_busy_poll = ixgbevf_busy_poll_recv;
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 #endif /* HAVE_RHEL6_NET_DEVICE_EXTENDED */
 
 	ixgbevf_set_ethtool_ops(dev);
@@ -4840,6 +4855,26 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 		goto err_sw_init;
 	}
 
+#ifdef HAVE_NETDEVICE_MIN_MAX_MTU
+	/* MTU range: 68 - 1504 or 9710 */
+	netdev->min_mtu = ETH_MIN_MTU;
+	switch (adapter->hw.api_version) {
+	case ixgbe_mbox_api_11:
+	case ixgbe_mbox_api_12:
+	case ixgbe_mbox_api_13:
+		netdev->max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
+				  (ETH_HLEN + ETH_FCS_LEN);
+		break;
+	default:
+		if (adapter->hw.mac.type != ixgbe_mac_82599_vf)
+			netdev->max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
+					  (ETH_HLEN + ETH_FCS_LEN);
+		else
+			netdev->max_mtu = ETH_DATA_LEN + ETH_FCS_LEN;
+		break;
+	}
+
+#endif
 	setup_timer(&adapter->service_timer, &ixgbevf_service_timer,
 		    (unsigned long) adapter);
 

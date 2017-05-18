@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2016 Intel Corporation.
+  Copyright(c) 1999 - 2017 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -49,8 +49,10 @@
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 #include <net/busy_poll.h>
+#ifdef HAVE_NDO_BUSY_POLL
 #define BP_EXTENDED_STATS
 #endif
+#endif /* CONFIG_NET_RX_BUSY_POLL */
 
 #define PFX "ixgbevf: "
 #define DPRINTK(nlevel, klevel, fmt, args...) \
@@ -88,11 +90,6 @@ struct ixgbevf_rx_buffer {
 struct ixgbevf_stats {
 	u64 packets;
 	u64 bytes;
-#ifdef BP_EXTENDED_STATS
-	u64 yields;
-	u64 misses;
-	u64 cleaned;
-#endif
 };
 
 struct ixgbevf_tx_queue_stats {
@@ -223,7 +220,7 @@ struct ixgbevf_q_vector {
 	char name[IFNAMSIZ + 9];
 	bool netpoll_rx;
 
-#ifdef CONFIG_NET_RX_BUSY_POLL
+#ifdef HAVE_NDO_BUSY_POLL
 	unsigned int state;
 #define IXGBEVF_QV_STATE_IDLE		0
 #define IXGBEVF_QV_STATE_NAPI		1    /* NAPI owns this QV */
@@ -236,12 +233,13 @@ struct ixgbevf_q_vector {
 #define IXGBEVF_QV_YIELD (IXGBEVF_QV_STATE_NAPI_YIELD | IXGBEVF_QV_STATE_POLL_YIELD)
 #define IXGBEVF_QV_USER_PEND (IXGBEVF_QV_STATE_POLL | IXGBEVF_QV_STATE_POLL_YIELD)
 	spinlock_t lock;
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 
 	/* for dynamic allocation of rings associated with this q_vector */
 	struct ixgbevf_ring ring[0] ____cacheline_internodealigned_in_smp;
 };
-#ifdef CONFIG_NET_RX_BUSY_POLL
+
+#ifdef HAVE_NDO_BUSY_POLL
 static inline void ixgbevf_qv_init_lock(struct ixgbevf_q_vector *q_vector)
 {
 
@@ -258,9 +256,6 @@ static inline bool ixgbevf_qv_lock_napi(struct ixgbevf_q_vector *q_vector)
 		WARN_ON(q_vector->state & IXGBEVF_QV_STATE_NAPI);
 		q_vector->state |= IXGBEVF_QV_STATE_NAPI_YIELD;
 		rc = false;
-#ifdef BP_EXTENDED_STATS
-		q_vector->tx.ring->stats.yields++;
-#endif
 	} else {
 		/* we don't care if someone yielded */
 		q_vector->state = IXGBEVF_QV_STATE_NAPI;
@@ -293,9 +288,6 @@ static inline bool ixgbevf_qv_lock_poll(struct ixgbevf_q_vector *q_vector)
 	if ((q_vector->state & IXGBEVF_QV_LOCKED)) {
 		q_vector->state |= IXGBEVF_QV_STATE_POLL_YIELD;
 		rc = false;
-#ifdef BP_EXTENDED_STATS
-		q_vector->rx.ring->stats.yields++;
-#endif
 	} else {
 		/* preserve yield marks */
 		q_vector->state |= IXGBEVF_QV_STATE_POLL;
@@ -338,7 +330,7 @@ static inline bool ixgbevf_qv_disable(struct ixgbevf_q_vector *q_vector)
 	return rc;
 }
 
-#endif /* CONFIG_NET_RX_BUSY_POLL */
+#endif /* HAVE_NDO_BUSY_POLL */
 
 /*
  * microsecond values for various ITR rates shifted by 2 to fit itr register
@@ -480,20 +472,13 @@ enum ixbgevf_state_t {
 	__IXGBEVF_QUEUE_RESET_REQUESTED,
 };
 
-enum ixgbevf_xcast_modes {
-	IXGBEVF_XCAST_MODE_NONE = 0,
-	IXGBEVF_XCAST_MODE_MULTI,
-	IXGBEVF_XCAST_MODE_ALLMULTI,
-};
-
 #ifdef HAVE_VLAN_RX_REGISTER
-
 struct ixgbevf_cb {
 	u16 vid;			/* VLAN tag */
 };
 #define IXGBE_CB(skb) ((struct ixgbevf_cb *)(skb)->cb)
-#endif
 
+#endif
 /* needed by ixgbevf_main.c */
 extern void ixgbevf_check_options(struct ixgbevf_adapter *adapter);
 
