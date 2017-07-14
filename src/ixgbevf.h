@@ -90,6 +90,11 @@ struct ixgbevf_rx_buffer {
 struct ixgbevf_stats {
 	u64 packets;
 	u64 bytes;
+#ifdef BP_EXTENDED_STATS
+	u64 yields;
+	u64 misses;
+	u64 cleaned;
+#endif
 };
 
 struct ixgbevf_tx_queue_stats {
@@ -256,6 +261,9 @@ static inline bool ixgbevf_qv_lock_napi(struct ixgbevf_q_vector *q_vector)
 		WARN_ON(q_vector->state & IXGBEVF_QV_STATE_NAPI);
 		q_vector->state |= IXGBEVF_QV_STATE_NAPI_YIELD;
 		rc = false;
+#ifdef BP_EXTENDED_STATS
+		q_vector->tx.ring->stats.yields++;
+#endif
 	} else {
 		/* we don't care if someone yielded */
 		q_vector->state = IXGBEVF_QV_STATE_NAPI;
@@ -288,6 +296,9 @@ static inline bool ixgbevf_qv_lock_poll(struct ixgbevf_q_vector *q_vector)
 	if ((q_vector->state & IXGBEVF_QV_LOCKED)) {
 		q_vector->state |= IXGBEVF_QV_STATE_POLL_YIELD;
 		rc = false;
+#ifdef BP_EXTENDED_STATS
+		q_vector->rx.ring->stats.yields++;
+#endif
 	} else {
 		/* preserve yield marks */
 		q_vector->state |= IXGBEVF_QV_STATE_POLL;

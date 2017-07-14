@@ -1721,6 +1721,23 @@ int __kc_pci_enable_msix_range(struct pci_dev *dev, struct msix_entry *entries,
 }
 #endif /* 3.14.0 */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0))
+char *_kc_devm_kstrdup(struct device *dev, const char *s, gfp_t gfp)
+{
+	size_t size;
+	char *buf;
+
+	if (!s)
+		return NULL;
+
+	size = strlen(s) + 1;
+	buf = devm_kzalloc(dev, size, gfp);
+	if (buf)
+		memcpy(buf, s, size);
+	return buf;
+}
+#endif /* 3.15.0 */
+
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) )
 #ifdef HAVE_SET_RX_MODE
 #ifdef NETDEV_HW_ADDR_T_UNICAST

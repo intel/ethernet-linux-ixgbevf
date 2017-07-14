@@ -25,6 +25,7 @@ Contents
 Overview
 --------
 
+
 This virtual function driver supports kernel versions 2.6.x and newer.
 
 This driver supports 82599, X540, X550, and X552-based virtual function devices
@@ -323,8 +324,9 @@ kernel.
 Rx Page Allocation Errors
 -------------------------
 
-'Page allocation failure. order:0' errors may occur under stress with kernels
-2.6.25 and newer. This is caused by the way the Linux kernel reports this
+'Page allocation failure. order:0' errors may occur under stress.
+with kernels 2.6.25 and newer.
+This is caused by the way the Linux kernel reports this
 stressed condition.
 
 

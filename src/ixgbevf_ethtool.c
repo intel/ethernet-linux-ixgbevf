@@ -611,6 +611,11 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		if (!ring) {
 			data[i++] = 0;
 			data[i++] = 0;
+#ifdef BP_EXTENDED_STATS
+			data[i++] = 0;
+			data[i++] = 0;
+			data[i++] = 0;
+#endif
 			continue;
 		}
 
@@ -624,6 +629,12 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
 #endif
 		i += 2;
+#ifdef BP_EXTENDED_STATS
+		data[i] = ring->stats.yields;
+		data[i+1] = ring->stats.misses;
+		data[i+2] = ring->stats.cleaned;
+		i += 3;
+#endif
 	}
 
 	/* populate Rx queue data */
@@ -632,6 +643,11 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		if (!ring) {
 			data[i++] = 0;
 			data[i++] = 0;
+#ifdef BP_EXTENDED_STATS
+			data[i++] = 0;
+			data[i++] = 0;
+			data[i++] = 0;
+#endif
 			continue;
 		}
 
@@ -645,6 +661,12 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
 #endif
 		i += 2;
+#ifdef BP_EXTENDED_STATS
+		data[i] = ring->stats.yields;
+		data[i+1] = ring->stats.misses;
+		data[i+2] = ring->stats.cleaned;
+		i += 3;
+#endif
 	}
 }
 
@@ -672,12 +694,28 @@ static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 			p += ETH_GSTRING_LEN;
 			sprintf(p, "tx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
+#ifdef BP_EXTENDED_STATS
+			sprintf(p, "tx_queue_%u_bp_napi_yield", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "tx_queue_%u_bp_misses", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "tx_queue_%u_bp_cleaned", i);
+			p += ETH_GSTRING_LEN;
+#endif /* BP_EXTENDED_STATS */
 		}
 		for (i = 0; i < adapter->num_rx_queues; i++) {
 			sprintf(p, "rx_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
 			sprintf(p, "rx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
+#ifdef BP_EXTENDED_STATS
+			sprintf(p, "rx_queue_%u_bp_poll_yield", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "rx_queue_%u_bp_misses", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "rx_queue_%u_bp_cleaned", i);
+			p += ETH_GSTRING_LEN;
+#endif /* BP_EXTENDED_STATS */
 		}
 		break;
 	}
@@ -1044,8 +1082,7 @@ static int ixgbevf_set_rss_hash_opt(struct ixgbevf_adapter *adapter,
 	if (hw->mac.type < ixgbe_mac_X550)
 		return -EOPNOTSUPP;
 
-	/*
-	 * RSS does not support anything other than hashing
+	/* RSS does not support anything other than hashing
 	 * to queues on src and dst IPs and ports
 	 */
 	if (nfc->data & ~(RXH_IP_SRC | RXH_IP_DST |
@@ -1151,6 +1188,7 @@ static int ixgbevf_get_rss_hash_opts(struct ixgbevf_adapter *adapter,
 	switch (cmd->flow_type) {
 	case TCP_V4_FLOW:
 		cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+		/* fall through */
 	case UDP_V4_FLOW:
 		if (adapter->flags & IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP)
 			cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
@@ -1164,6 +1202,7 @@ static int ixgbevf_get_rss_hash_opts(struct ixgbevf_adapter *adapter,
 		break;
 	case TCP_V6_FLOW:
 		cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
+		/* fall through */
 	case UDP_V6_FLOW:
 		if (adapter->flags & IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP)
 			cmd->data |= RXH_L4_B_0_1 | RXH_L4_B_2_3;
@@ -1254,8 +1293,9 @@ static int ixgbevf_get_reta_locked(struct ixgbe_hw *hw, u32 *reta,
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_12:
-		if (hw->mac.type >= ixgbe_mac_X550_vf)
+		if (hw->mac.type < ixgbe_mac_X550_vf)
 			break;
+		/* fall through */
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -1320,8 +1360,9 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_12:
-		if (hw->mac.type >= ixgbe_mac_X550_vf)
+		if (hw->mac.type < ixgbe_mac_X550_vf)
 			break;
+		/* fall through */
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -1340,7 +1381,7 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
 	/* If the operation has been refused by a PF return -EPERM */
-	if (msgbuf[0] == (IXGBE_VF_GET_RETA | IXGBE_VT_MSGTYPE_NACK))
+	if (msgbuf[0] == (IXGBE_VF_GET_RSS_KEY | IXGBE_VT_MSGTYPE_NACK))
 		return -EPERM;
 
 	/* If we didn't get an ACK there must have been

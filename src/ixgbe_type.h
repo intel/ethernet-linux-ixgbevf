@@ -262,6 +262,46 @@
 #define IXGBE_I2C_CLK_OE_N_EN_BY_MAC(_hw) IXGBE_BY_MAC((_hw), I2C_CLK_OE_N_EN)
 #define IXGBE_I2C_CLOCK_STRETCHING_TIMEOUT	500
 
+#define NVM_OROM_OFFSET		0x17
+#define NVM_OROM_BLK_LOW	0x83
+#define NVM_OROM_BLK_HI		0x84
+#define NVM_OROM_PATCH_MASK	0xFF
+#define NVM_OROM_SHIFT		8
+
+#define NVM_VER_MASK		0x00FF /* version mask */
+#define NVM_VER_SHIFT		8     /* version bit shift */
+#define NVM_OEM_PROD_VER_PTR	0x1B  /* OEM Product version block pointer */
+#define NVM_OEM_PROD_VER_CAP_OFF 0x1  /* OEM Product version format offset */
+#define NVM_OEM_PROD_VER_OFF_L	0x2   /* OEM Product version offset low */
+#define NVM_OEM_PROD_VER_OFF_H	0x3   /* OEM Product version offset high */
+#define NVM_OEM_PROD_VER_CAP_MASK 0xF /* OEM Product version cap mask */
+#define NVM_OEM_PROD_VER_MOD_LEN 0x3  /* OEM Product version module length */
+#define NVM_ETK_OFF_LOW		0x2D  /* version low order word */
+#define NVM_ETK_OFF_HI		0x2E  /* version high order word */
+#define NVM_ETK_SHIFT		16    /* high version word shift */
+#define NVM_VER_INVALID		0xFFFF
+#define NVM_ETK_VALID		0x8000
+#define NVM_INVALID_PTR		0xFFFF
+#define NVM_VER_SIZE		32    /* version sting size */
+
+struct ixgbe_nvm_version {
+	u32 etk_id;
+	u8  nvm_major;
+	u16 nvm_minor;
+	u8  nvm_id;
+
+	bool oem_valid;
+	u8   oem_major;
+	u8   oem_minor;
+	u16  oem_release;
+
+	bool or_valid;
+	u8  or_major;
+	u16 or_build;
+	u8  or_patch;
+
+};
+
 /* Interrupt Registers */
 #define IXGBE_EICR		0x00800
 #define IXGBE_EICS		0x00808
@@ -3034,11 +3074,6 @@ enum ixgbe_fdir_pballoc_type {
 #define FW_PHY_ACT_FORCE_LINK_DOWN_OFF	(1u << 0)
 #define FW_PHY_ACT_PHY_SW_RESET		5
 #define FW_PHY_ACT_PHY_HW_RESET		6
-#define FW_PHY_ACT_TEMP_MASK		0x001F
-#define FW_PHY_ACT_THRES_MASK		0x1F00
-#define FW_PHY_ACT_THRES_SHIFT		8
-#define FW_PHY_ACT_TEMP_INT		(1u << 6)
-#define FW_PHY_ACT_UD_0			0x1000
 #define FW_PHY_ACT_GET_PHY_INFO		7
 #define FW_PHY_ACT_UD_2			0x1002
 #define FW_PHY_ACT_UD_2_10G_KR_EEE	(1u << 6)
