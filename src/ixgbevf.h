@@ -187,10 +187,10 @@ struct ixgbevf_ring {
 
 #define MAXIMUM_ETHERNET_VLAN_SIZE (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN)
 
-#define IXGBE_TX_FLAGS_CSUM		(u32)(1)
-#define IXGBE_TX_FLAGS_VLAN		(u32)(1 << 1)
-#define IXGBE_TX_FLAGS_TSO		(u32)(1 << 2)
-#define IXGBE_TX_FLAGS_IPV4		(u32)(1 << 3)
+#define IXGBE_TX_FLAGS_CSUM		BIT(0)
+#define IXGBE_TX_FLAGS_VLAN		BIT(1)
+#define IXGBE_TX_FLAGS_TSO		BIT(2)
+#define IXGBE_TX_FLAGS_IPV4		BIT(3)
 #define IXGBE_TX_FLAGS_VLAN_MASK	0xffff0000
 #define IXGBE_TX_FLAGS_VLAN_PRIO_MASK	0x0000e000
 #define IXGBE_TX_FLAGS_VLAN_SHIFT	16
@@ -448,7 +448,6 @@ struct ixgbevf_adapter {
 
 	u32 *config_space;
 
-	u16 bd_number;
 	u16 msg_enable;
 
 	u8 __iomem *io_addr;
@@ -476,7 +475,7 @@ enum ixbgevf_state_t {
 	__IXGBEVF_RESETTING,
 	__IXGBEVF_DOWN,
 	__IXGBEVF_DISABLED,
-	__IXGBEVF_REMOVE,
+	__IXGBEVF_REMOVING,
 	__IXGBEVF_SERVICE_SCHED,
 	__IXGBEVF_SERVICE_INITED,
 	__IXGBEVF_RESET_REQUESTED,

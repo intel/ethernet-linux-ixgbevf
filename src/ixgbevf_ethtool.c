@@ -316,7 +316,8 @@ static void ixgbevf_get_regs(struct net_device *netdev, struct ethtool_regs *reg
 
 	memset(p, 0, IXGBE_REGS_LEN * sizeof(u32));
 
-	regs->version = (1 << 24) | hw->revision_id << 16 | hw->device_id;
+	/* generate a number suitable for ethtool's register version */
+	regs->version = (1u << 24) | hw->revision_id << 16 | hw->device_id;
 
 	/* IXGBE_VFCTRL is a Write Only register, so just return 0 */
 	regs_buff[0] = 0x0;
@@ -401,7 +402,6 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 	strlcpy(drvinfo->driver, ixgbevf_driver_name, sizeof(drvinfo->driver));
 	strlcpy(drvinfo->version, ixgbevf_driver_version,
 		sizeof(drvinfo->version));
-	strlcpy(drvinfo->fw_version, "N/A", 4);
 	strlcpy(drvinfo->bus_info, pci_name(adapter->pdev),
 		sizeof(drvinfo->bus_info));
 }
@@ -413,12 +413,8 @@ static void ixgbevf_get_ringparam(struct net_device *netdev,
 
 	ring->rx_max_pending = IXGBEVF_MAX_RXD;
 	ring->tx_max_pending = IXGBEVF_MAX_TXD;
-	ring->rx_mini_max_pending = 0;
-	ring->rx_jumbo_max_pending = 0;
 	ring->rx_pending = adapter->rx_ring_count;
 	ring->tx_pending = adapter->tx_ring_count;
-	ring->rx_mini_pending = 0;
-	ring->rx_jumbo_pending = 0;
 }
 
 static int ixgbevf_set_ringparam(struct net_device *netdev,

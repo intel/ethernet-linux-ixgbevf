@@ -56,7 +56,7 @@
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.2.2) RELEASE_TAG
+#define DRV_VERSION __stringify(4.3.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -148,7 +148,7 @@ MODULE_VERSION(DRV_VERSION);
 static void ixgbevf_service_event_schedule(struct ixgbevf_adapter *adapter)
 {
 	if (!test_bit(__IXGBEVF_DOWN, &adapter->state) &&
-	    !test_bit(__IXGBEVF_REMOVE, &adapter->state) &&
+	    !test_bit(__IXGBEVF_REMOVING, &adapter->state) &&
 	    !test_and_set_bit(__IXGBEVF_SERVICE_SCHED, &adapter->state))
 		schedule_work(&adapter->service_task);
 }
@@ -402,7 +402,7 @@ static bool ixgbevf_clean_tx_irq(struct ixgbevf_q_vector *q_vector,
 			break;
 
 		/* prevent any other reads prior to eop_desc */
-		rmb();
+		read_barrier_depends();
 
 		/* if DD is not set pending work has not been completed */
 		if (!(eop_desc->wb.status & cpu_to_le32(IXGBE_TXD_STAT_DD)))
@@ -656,7 +656,7 @@ static inline void ixgbevf_rx_checksum(struct ixgbevf_ring *ring,
 				       union ixgbe_adv_rx_desc *rx_desc,
 				       struct sk_buff *skb)
 {
-	skb->ip_summed = CHECKSUM_NONE;
+	skb_checksum_none_assert(skb);
 
 	/* Rx csum disabled */
 	if (!(ring->netdev->features & NETIF_F_RXCSUM))
@@ -1192,7 +1192,7 @@ static int ixgbevf_clean_rx_irq(struct ixgbevf_q_vector *q_vector,
 	u16 cleaned_count = ixgbevf_desc_unused(rx_ring);
 	struct sk_buff *skb = rx_ring->skb;
 
-	do {
+	while (likely(total_rx_packets < budget)) {
 		union ixgbe_adv_rx_desc *rx_desc;
 
 		/* return some buffers to hardware, one at a time is too slow */
@@ -1256,7 +1256,7 @@ static int ixgbevf_clean_rx_irq(struct ixgbevf_q_vector *q_vector,
 
 		/* update budget accounting */
 		total_rx_packets++;
-	} while (likely(total_rx_packets < budget));
+	}
 
 	/* place incomplete frames back on ring for completion */
 	rx_ring->skb = skb;
@@ -1332,9 +1332,10 @@ static int ixgbevf_poll(struct napi_struct *napi, int budget)
 	napi_complete_done(napi, work_done);
 	if (adapter->rx_itr_setting == 1)
 		ixgbevf_set_itr(q_vector);
-	if (!test_bit(__IXGBEVF_DOWN, &adapter->state))
+	if (!test_bit(__IXGBEVF_DOWN, &adapter->state) &&
+	    !test_bit(__IXGBEVF_REMOVING, &adapter->state))
 		ixgbevf_irq_enable_queues(adapter,
-					  1 << q_vector->v_idx);
+					  BIT(q_vector->v_idx));
 
 	return 0;
 }
@@ -1467,14 +1468,14 @@ static void ixgbevf_configure_msix(struct ixgbevf_adapter *adapter)
 		}
 
 		/* add q_vector eims value to global eims_enable_mask */
-		adapter->eims_enable_mask |= 1 << v_idx;
+		adapter->eims_enable_mask |= BIT(v_idx);
 
 		ixgbevf_write_eitr(q_vector);
 	}
 
 	ixgbevf_set_ivar(adapter, -1, 1, v_idx);
 	/* setup eims_other and add value to global eims_enable_mask */
-	adapter->eims_other = 1 << v_idx;
+	adapter->eims_other = BIT(v_idx);
 	adapter->eims_enable_mask |= adapter->eims_other;
 }
 
@@ -1674,9 +1675,17 @@ free_queue_irqs:
 		free_irq(adapter->msix_entries[vector].vector,
 			 adapter->q_vector[vector]);
 	}
-	pci_disable_msix(adapter->pdev);
-	kfree(adapter->msix_entries);
-	adapter->msix_entries = NULL;
+	/* This failure is non-recoverable - it indicates the system is
+	 * out of MSIX vector resources and the VF driver cannot run
+	 * without them.  Set the number of q vectors to zero
+	 * indicating that not enough can be allocated.  The error
+	 * will be returned to the user indicating device open failed.
+	 * Any further attempts to force the driver to open will also
+	 * fail.  The only way to recover is to unload the driver and
+	 * reload it again.  If the system has recovered some MSIX
+	 * vectors then it may succeed.
+	 */
+	adapter->num_q_vectors = 0;
 	return err;
 }
 
@@ -1811,7 +1820,7 @@ static void ixgbevf_configure_tx_ring(struct ixgbevf_adapter *adapter,
 		txdctl |= (8 << 16);    /* WTHRESH = 8 */
 
 	/* Setting PTHRESH to 32 both improves performance */
-	txdctl |= (1 << 8) |    /* HTHRESH = 1 */
+	txdctl |= (1u << 8) |   /* HTHRESH = 1 */
 		   32;          /* PTHRESH = 32 */
 
 	clear_bit(__IXGBEVF_HANG_CHECK_ARMED, &ring->state);
@@ -1866,7 +1875,7 @@ static void ixgbevf_setup_psrtype(struct ixgbevf_adapter *adapter)
 		      IXGBE_PSRTYPE_L2HDR;
 
 	if (adapter->num_rx_queues > 1)
-		psrtype |= 1 << 29;
+		psrtype |= BIT(29);
 
 	IXGBE_WRITE_REG(hw, IXGBE_VFPSRTYPE, psrtype);
 }
@@ -1974,9 +1983,15 @@ static void ixgbevf_configure_rx_ring(struct ixgbevf_adapter *adapter,
 	IXGBE_WRITE_REG(hw, IXGBE_VFRDLEN(reg_idx),
 			ring->count * sizeof(union ixgbe_adv_rx_desc));
 
+#ifndef CONFIG_SPARC
 	/* enable relaxed ordering */
 	IXGBE_WRITE_REG(hw, IXGBE_VFDCA_RXCTRL(reg_idx),
 			IXGBE_DCA_RXCTRL_DESC_RRO_EN);
+#else
+	IXGBE_WRITE_REG(hw, IXGBE_VFDCA_RXCTRL(reg_idx),
+			IXGBE_DCA_RXCTRL_DESC_RRO_EN |
+			IXGBE_DCA_RXCTRL_DESC_WRO_EN);
+#endif
 
 	/* reset head and tail pointers */
 	IXGBE_WRITE_REG(hw, IXGBE_VFRDH(reg_idx), 0);
@@ -2720,7 +2735,7 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 	if (num_tcs > 1) {
 		adapter->num_rx_queues = num_tcs;
 	} else {
-		u16 rss = min_t(u16, num_online_cpus(), 2);
+		u16 rss = min_t(u16, num_online_cpus(), IXGBEVF_MAX_RSS_QUEUES);
 
 		switch (hw->api_version) {
 		case ixgbe_mbox_api_11:
@@ -3250,7 +3265,7 @@ static void ixgbevf_reset_subtask(struct ixgbevf_adapter *adapter)
 
 	/* If we're already down or resetting, just bail */
 	if (test_bit(__IXGBEVF_DOWN, &adapter->state) ||
-	    test_bit(__IXGBEVF_REMOVE, &adapter->state) ||
+	    test_bit(__IXGBEVF_REMOVING, &adapter->state) ||
 	    test_bit(__IXGBEVF_RESETTING, &adapter->state))
 		return;
 
@@ -3290,7 +3305,7 @@ static void ixgbevf_check_hang_subtask(struct ixgbevf_adapter *adapter)
 	for (i = 0; i < adapter->num_q_vectors; i++) {
 		struct ixgbevf_q_vector *qv = adapter->q_vector[i];
 		if (qv->rx.ring || qv->tx.ring)
-			eics |= 1 << i;
+			eics |= BIT(i);
 	}
 
 	/* Cause software interrupt to ensure rings are cleaned */
@@ -3355,7 +3370,7 @@ static void ixgbevf_watchdog_link_is_up(struct ixgbevf_adapter *adapter)
 		speed_str = "100 Mbps";
 		break;
 	case IXGBE_LINK_SPEED_10_FULL:
-		speed_str = "100 Mbps";
+		speed_str = "10 Mbps";
 		break;
 	default:
 		speed_str = "unknown speed";
@@ -3654,6 +3669,15 @@ static int ixgbevf_open(struct net_device *netdev)
 	struct ixgbe_hw *hw = &adapter->hw;
 	int err;
 
+	/* A previous failure to open the device because of a lack of
+	 * available MSIX vector resources may have reset the number
+	 * of q vectors variable to zero.  The only way to recover
+	 * is to unload/reload the driver and hope that the system has
+	 * been able to recover some MSIX vector resources.
+	 */
+	if (!adapter->num_q_vectors)
+		return -ENOMEM;
+
 	if (hw->adapter_stopped) {
 		ixgbevf_reset(adapter);
 		/* if adapter is still stopped then PF isn't up and
@@ -3810,10 +3834,22 @@ static int ixgbevf_tso(struct ixgbevf_ring *tx_ring,
 		       struct ixgbevf_tx_buffer *first,
 		       u8 *hdr_len)
 {
+#ifndef NETIF_F_TSO
+	return 0;
+#else
+	u32 vlan_macip_lens, type_tucmd, mss_l4len_idx;
 	struct sk_buff *skb = first->skb;
-#ifdef NETIF_F_TSO
-	u32 vlan_macip_lens, type_tucmd;
-	u32 mss_l4len_idx, l4len;
+	union {
+		struct iphdr *v4;
+		struct ipv6hdr *v6;
+		unsigned char *hdr;
+	} ip;
+	union {
+		struct tcphdr *tcp;
+		unsigned char *hdr;
+	} l4;
+	u32 paylen, l4_offset;
+	int err;
 
 	if (skb->ip_summed != CHECKSUM_PARTIAL)
 		return 0;
@@ -3821,65 +3857,77 @@ static int ixgbevf_tso(struct ixgbevf_ring *tx_ring,
 	if (!skb_is_gso(skb))
 		return 0;
 
-	if (skb_header_cloned(skb)) {
-		int err = pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
-		if (err)
-			return err;
-	}
+	err = skb_cow_head(skb, 0);
+	if (err)
+		return err;
+
+	ip.hdr = skb_network_header(skb);
+	l4.hdr = skb_checksum_start(skb);
 
 	/* ADV DTYP TUCMD MKRLOC/ISCSIHEDLEN */
 	type_tucmd = IXGBE_ADVTXD_TUCMD_L4T_TCP;
 
-	if (first->protocol == htons(ETH_P_IP)) {
-		struct iphdr *iph = ip_hdr(skb);
-		iph->tot_len = 0;
-		iph->check = 0;
-		tcp_hdr(skb)->check = ~csum_tcpudp_magic(iph->saddr,
-							 iph->daddr, 0,
-							 IPPROTO_TCP,
-							 0);
+	/* initialize outer IP header fields */
+	if (ip.v4->version == 4) {
+		unsigned char *csum_start = skb_checksum_start(skb);
+		unsigned char *trans_start = ip.hdr + (ip.v4->ihl * 4);
+
+
+		/* IP header will have to cancel out any data that
+		 * is not a part of the outer IP header
+		 */
+		ip.v4->check = csum_fold(csum_partial(trans_start,
+						      csum_start - trans_start,
+						      0));
 		type_tucmd |= IXGBE_ADVTXD_TUCMD_IPV4;
+		ip.v4->tot_len = 0;
 		first->tx_flags |= IXGBE_TX_FLAGS_TSO |
 				   IXGBE_TX_FLAGS_CSUM |
 				   IXGBE_TX_FLAGS_IPV4;
-#ifdef NETIF_F_TSO6
-	} else if (skb_is_gso_v6(skb)) {
-		ipv6_hdr(skb)->payload_len = 0;
-		tcp_hdr(skb)->check =
-		    ~csum_ipv6_magic(&ipv6_hdr(skb)->saddr,
-				     &ipv6_hdr(skb)->daddr,
-				     0, IPPROTO_TCP, 0);
+	} else {
+		ip.v6->payload_len = 0;
 		first->tx_flags |= IXGBE_TX_FLAGS_TSO |
 				   IXGBE_TX_FLAGS_CSUM;
-#endif
 	}
 
-	/* compute header lengths */
-	l4len = tcp_hdrlen(skb);
-	*hdr_len += l4len;
-	*hdr_len = skb_transport_offset(skb) + l4len;
+	/* determine offset of inner transport header */
+	l4_offset = l4.hdr - skb->data;
+
+	/* compute length of segmentation header */
+	*hdr_len = (l4.tcp->doff * 4)  + l4_offset;
+
+	/* remove payload length from inner checksum */
+	paylen = skb->len - l4_offset;
+	csum_replace_by_diff(&l4.tcp->check, htonl(paylen));
 
 	/* update gso size and bytecount with header size */
 	first->gso_segs = skb_shinfo(skb)->gso_segs;
 	first->bytecount += (first->gso_segs - 1) * *hdr_len;
 
 	/* mss_l4len_id: use 1 as index for TSO */
-	mss_l4len_idx = l4len << IXGBE_ADVTXD_L4LEN_SHIFT;
+	mss_l4len_idx = (*hdr_len - l4_offset) << IXGBE_ADVTXD_L4LEN_SHIFT;
 	mss_l4len_idx |= skb_shinfo(skb)->gso_size << IXGBE_ADVTXD_MSS_SHIFT;
-	mss_l4len_idx |= 1 << IXGBE_ADVTXD_IDX_SHIFT;
+	mss_l4len_idx |= (1u << IXGBE_ADVTXD_IDX_SHIFT);
 
 	/* vlan_macip_lens: HEADLEN, MACLEN, VLAN tag */
-	vlan_macip_lens = skb_network_header_len(skb);
-	vlan_macip_lens |= skb_network_offset(skb) << IXGBE_ADVTXD_MACLEN_SHIFT;
+	vlan_macip_lens = l4.hdr - ip.hdr;
+	vlan_macip_lens |= (ip.hdr - skb->data) << IXGBE_ADVTXD_MACLEN_SHIFT;
 	vlan_macip_lens |= first->tx_flags & IXGBE_TX_FLAGS_VLAN_MASK;
 
 	ixgbevf_tx_ctxtdesc(tx_ring, vlan_macip_lens,
 			    type_tucmd, mss_l4len_idx);
 
 	return 1;
-#else
-	return 0;
-#endif /* NETIF_F_TSO */
+#endif
+}
+
+static inline bool ixgbevf_ipv6_csum_is_sctp(struct sk_buff *skb)
+{
+	unsigned int offset = 0;
+
+	ipv6_find_hdr(skb, &offset, IPPROTO_SCTP, NULL, NULL);
+
+	return offset == skb_checksum_start_offset(skb);
 }
 
 static void ixgbevf_tx_csum(struct ixgbevf_ring *tx_ring,
@@ -3887,93 +3935,43 @@ static void ixgbevf_tx_csum(struct ixgbevf_ring *tx_ring,
 {
 	struct sk_buff *skb = first->skb;
 	u32 vlan_macip_lens = 0;
-	u32 mss_l4len_idx = 0;
 	u32 type_tucmd = 0;
 
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		u8 l4_hdr = 0;
-#ifdef HAVE_ENCAP_TSO_OFFLOAD
-		__be16 frag_off;
-#endif
+	if (skb->ip_summed != CHECKSUM_PARTIAL)
+		goto no_csum;
 
-		switch (first->protocol) {
-		case __constant_htons(ETH_P_IP):
-			vlan_macip_lens |= skb_network_header_len(skb);
-			type_tucmd |= IXGBE_ADVTXD_TUCMD_IPV4;
-			l4_hdr = ip_hdr(skb)->protocol;
-			break;
-#ifdef NETIF_F_IPV6_CSUM
-		case __constant_htons(ETH_P_IPV6):
-			vlan_macip_lens |= skb_network_header_len(skb);
-			l4_hdr = ipv6_hdr(skb)->nexthdr;
-#ifdef HAVE_ENCAP_TSO_OFFLOAD
-			if (likely(skb_network_header_len(skb) ==
-				   sizeof(struct ipv6hdr)))
-				break;
-			ipv6_skip_exthdr(skb, skb_network_offset(skb) +
-					      sizeof(struct ipv6hdr),
-					 &l4_hdr, &frag_off);
-			if (unlikely(frag_off))
-				l4_hdr = NEXTHDR_FRAGMENT;
-#endif /* HAVE_ENCAP_TSO_OFFLOAD */
-			break;
-#endif /* NETIF_F_IPV6_CSUM */
-		default:
-			if (unlikely(net_ratelimit())) {
-				dev_warn(tx_ring->dev,
-				 "partial checksum but proto=%x!\n",
-				 first->protocol);
-			}
+	switch (skb->csum_offset) {
+	case offsetof(struct tcphdr, check):
+		type_tucmd = IXGBE_ADVTXD_TUCMD_L4T_TCP;
+		/* fall through */
+	case offsetof(struct udphdr, check):
+		break;
+	case offsetof(struct sctphdr, checksum):
+		/* validate this is actual an SCTP request */
+		if (((first->protocol == htons(ETH_P_IP)) &&
+		     (ip_hdr(skb)->protocol == IPPROTO_SCTP)) ||
+		    ((first->protocol == htons(ETH_P_IPV6)) &&
+		     ixgbevf_ipv6_csum_is_sctp(skb))) {
+			type_tucmd = IXGBE_ADVTXD_TUCMD_L4T_SCTP;
 			break;
 		}
-
-		switch (l4_hdr) {
-		case IPPROTO_TCP:
-			type_tucmd |= IXGBE_ADVTXD_TUCMD_L4T_TCP;
-			mss_l4len_idx = tcp_hdrlen(skb) <<
-					IXGBE_ADVTXD_L4LEN_SHIFT;
-			break;
-		case IPPROTO_SCTP:
-			type_tucmd |= IXGBE_ADVTXD_TUCMD_L4T_SCTP;
-			mss_l4len_idx = sizeof(struct sctphdr) <<
-					IXGBE_ADVTXD_L4LEN_SHIFT;
-			break;
-		case IPPROTO_UDP:
-			mss_l4len_idx = sizeof(struct udphdr) <<
-					IXGBE_ADVTXD_L4LEN_SHIFT;
-			break;
-		default:
-#ifdef HAVE_ENCAP_TSO_OFFLOAD
-			if (unlikely(net_ratelimit())) {
-				dev_warn(tx_ring->dev,
-					 "partial checksum, l3 proto=%x, l4 proto=%x\n",
-					 first->protocol, l4_hdr);
-			}
-			skb_checksum_help(skb);
-			goto no_csum;
-#else
-			if (unlikely(net_ratelimit())) {
-				dev_warn(tx_ring->dev,
-				 "partial checksum but l4 proto=%x!\n",
-				 l4_hdr);
-			}
-			break;
-#endif /* HAVE_ENCAP_TSO_OFFLOAD */
-		}
-
-		/* update TX checksum flag */
-		first->tx_flags |= IXGBE_TX_FLAGS_CSUM;
+		/* fall through */
+	default:
+		skb_checksum_help(skb);
+		goto no_csum;
 	}
 
-#ifdef HAVE_ENCAP_TSO_OFFLOAD
+	/* update TX checksum flag */
+	first->tx_flags |= IXGBE_TX_FLAGS_CSUM;
+	vlan_macip_lens = skb_checksum_start_offset(skb) -
+			  skb_network_offset(skb);
+
 no_csum:
-#endif
 	/* vlan_macip_lens: MACLEN, VLAN tag */
 	vlan_macip_lens |= skb_network_offset(skb) << IXGBE_ADVTXD_MACLEN_SHIFT;
 	vlan_macip_lens |= first->tx_flags & IXGBE_TX_FLAGS_VLAN_MASK;
 
-	ixgbevf_tx_ctxtdesc(tx_ring, vlan_macip_lens,
-			    type_tucmd, mss_l4len_idx);
+	ixgbevf_tx_ctxtdesc(tx_ring, vlan_macip_lens, type_tucmd, 0);
 }
 
 static __le32 ixgbevf_tx_cmd_type(u32 tx_flags)
@@ -4009,7 +4007,7 @@ static void ixgbevf_tx_olinfo_status(union ixgbe_adv_tx_desc *tx_desc,
 
 	/* use index 1 context for TSO/FSO/FCOE */
 	if (tx_flags & IXGBE_TX_FLAGS_TSO)
-		olinfo_status |= cpu_to_le32(1 << IXGBE_ADVTXD_IDX_SHIFT);
+		olinfo_status |= cpu_to_le32(1u << IXGBE_ADVTXD_IDX_SHIFT);
 
 	/*
 	 * Check Context must be set if Tx switch is enabled, which it
@@ -4452,8 +4450,8 @@ static int ixgbevf_suspend(struct pci_dev *pdev, pm_message_t __maybe_unused sta
 #ifdef CONFIG_PM
 static int ixgbevf_resume(struct pci_dev *pdev)
 {
-	struct ixgbevf_adapter *adapter = pci_get_drvdata(pdev);
-	struct net_device *netdev = adapter->netdev;
+	struct net_device *netdev = pci_get_drvdata(pdev);
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	u32 err;
 
 	pci_restore_state(pdev);
@@ -4586,6 +4584,43 @@ static struct net_device_stats *ixgbevf_get_stats(struct net_device *netdev)
 	return net_stats;
 }
 #endif /* HAVE_NDO_GET_STATS64 */
+#ifdef NETIF_F_GSO_PARTIAL
+
+#define IXGBEVF_MAX_MAC_HDR_LEN		127
+#define IXGBEVF_MAX_NETWORK_HDR_LEN	511
+
+static netdev_features_t
+ixgbevf_features_check(struct sk_buff *skb, struct net_device *dev,
+		       netdev_features_t features)
+{
+	unsigned int network_hdr_len, mac_hdr_len;
+
+	/* Make certain the headers can be described by a context descriptor */
+	mac_hdr_len = skb_network_header(skb) - skb->data;
+	if (unlikely(mac_hdr_len > IXGBEVF_MAX_MAC_HDR_LEN))
+		return features & ~(NETIF_F_HW_CSUM |
+				    NETIF_F_SCTP_CRC |
+				    NETIF_F_HW_VLAN_CTAG_TX |
+				    NETIF_F_TSO |
+				    NETIF_F_TSO6);
+
+	network_hdr_len = skb_checksum_start(skb) - skb_network_header(skb);
+	if (unlikely(network_hdr_len >  IXGBEVF_MAX_NETWORK_HDR_LEN))
+		return features & ~(NETIF_F_HW_CSUM |
+				    NETIF_F_SCTP_CRC |
+				    NETIF_F_TSO |
+				    NETIF_F_TSO6);
+
+	/* We can only support IPV4 TSO in tunnels if we can mangle the
+	 * inner IP ID field, so strip TSO if MANGLEID is not supported.
+	 */
+	if (skb->encapsulation && !(features & NETIF_F_TSO_MANGLEID))
+		features &= ~NETIF_F_TSO;
+
+	return features;
+}
+#endif /* NETIF_F_GSO_PARTIAL */
+
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops ixgbevf_netdev_ops = {
 	.ndo_open		= ixgbevf_open,
@@ -4619,7 +4654,9 @@ static const struct net_device_ops ixgbevf_netdev_ops = {
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= ixgbevf_netpoll,
 #endif
-#ifdef HAVE_PASSTHRU_FEATURES_CHECK
+#if defined(NETIF_F_GSO_PARTIAL)
+	.ndo_features_check	= ixgbevf_features_check,
+#elif defined(HAVE_PASSTHRU_FEATURES_CHECK)
 	.ndo_features_check	= passthru_features_check,
 #endif
 };
@@ -4682,8 +4719,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	struct net_device *netdev;
 	struct ixgbevf_adapter *adapter = NULL;
 	struct ixgbe_hw *hw = NULL;
-	static int cards_found;
-	int i, err, pci_using_dac;
+	int err, pci_using_dac;
 	const struct ixgbevf_info *ei = ixgbevf_info_tbl[ent->driver_data];
 	bool disable_dev = false;
 #ifdef HAVE_NDO_SET_FEATURES
@@ -4698,19 +4734,15 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	if (err)
 		return err;
 
-	if (!dma_set_mask(pci_dev_to_dev(pdev), DMA_BIT_MASK(64)) &&
-	    !dma_set_coherent_mask(pci_dev_to_dev(pdev), DMA_BIT_MASK(64))) {
+	if (!dma_set_mask_and_coherent(pci_dev_to_dev(pdev),
+				       DMA_BIT_MASK(64))) {
 		pci_using_dac = 1;
 	} else {
-		err = dma_set_mask(pci_dev_to_dev(pdev), DMA_BIT_MASK(32));
+		err = dma_set_mask_and_coherent(pci_dev_to_dev(pdev),
+						DMA_BIT_MASK(32));
 		if (err) {
-			err = dma_set_coherent_mask(pci_dev_to_dev(pdev),
-						    DMA_BIT_MASK(32));
-			if (err) {
-				dev_err(pci_dev_to_dev(pdev), "No usable DMA "
-				        "configuration, aborting\n");
-				goto err_dma;
-			}
+			dev_err(pci_dev_to_dev(pdev), "No usable DMA configuration, aborting\n");
+			goto err_dma;
 		}
 		pci_using_dac = 0;
 	}
@@ -4767,8 +4799,6 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 
 	ixgbevf_assign_netdev_ops(netdev);
 
-	adapter->bd_number = cards_found;
-
 	/* setup the private structure */
 	err = ixgbevf_sw_init(adapter);
 	if (err)
@@ -4776,32 +4806,39 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 
 #if defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX)
 	netdev->features = NETIF_F_SG |
-			   NETIF_F_IP_CSUM |
-			   NETIF_F_RXCSUM |
-#ifdef NETIF_F_HW_VLAN_CTAG_TX
-			   NETIF_F_HW_VLAN_CTAG_TX |
-			   NETIF_F_HW_VLAN_CTAG_RX |
-			   NETIF_F_HW_VLAN_CTAG_FILTER;
-#endif
-#ifdef NETIF_F_HW_VLAN_TX
-			   NETIF_F_HW_VLAN_TX |
-			   NETIF_F_HW_VLAN_RX |
-			   NETIF_F_HW_VLAN_FILTER;
-#endif
-
-#else /* !defined(NETIF_F_HW_VLAN_TX) || !defined(NETIF_F_HW_VLAN_CTAG_TX) */
-	netdev->features = NETIF_F_SG | NETIF_F_IP_CSUM;
-
-#endif/* defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX) */
-#ifdef NETIF_F_IPV6_CSUM
-	netdev->features |= NETIF_F_IPV6_CSUM;
-#endif
 #ifdef NETIF_F_TSO
-	netdev->features |= NETIF_F_TSO;
+			   NETIF_F_TSO |
 #ifdef NETIF_F_TSO6
-	netdev->features |= NETIF_F_TSO6;
+			   NETIF_F_TSO6 |
 #endif /* NETIF_F_TSO6 */
 #endif /* NETIF_F_TSO */
+			   NETIF_F_RXCSUM |
+			   NETIF_F_HW_CSUM |
+			   NETIF_F_SCTP_CRC;
+
+#else /* !defined(NETIF_F_HW_VLAN_TX) || !defined(NETIF_F_HW_VLAN_CTAG_TX) */
+	netdev->features = NETIF_F_SG | NETIF_F_HW_CSUM;
+
+#endif/* defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX) */
+#ifdef NETIF_F_GSO_PARTIAL
+
+	netdev->gso_partial_features = NETIF_F_GSO_GRE |
+				       NETIF_F_GSO_GRE_CSUM |
+#ifdef NETIF_F_GSO_IPXIP4
+				       NETIF_F_GSO_IPXIP4 |
+#ifdef NETIF_F_GSO_IPXIP6
+				       NETIF_F_GSO_IPXIP6 |
+#endif
+#else
+				       NETIF_F_GSO_IPIP |
+				       NETIF_F_GSO_SIT |
+#endif
+				       NETIF_F_GSO_UDP_TUNNEL |
+				       NETIF_F_GSO_UDP_TUNNEL_CSUM;
+
+	netdev->features |= netdev->gso_partial_features |
+			    NETIF_F_GSO_PARTIAL;
+#endif /* NETIF_F_GSO_PARTIAL */
 #ifdef HAVE_NDO_SET_FEATURES
 	/* copy netdev features into list of user selectable features */
 #ifndef HAVE_RHEL6_NET_DEVICE_OPS_EXT
@@ -4816,7 +4853,6 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
         netdev->features |= NETIF_F_GRO;
 #endif /* NETIF_F_GRO */
 #endif /* HAVE_NDO_SET_FEATURES */
-
 #ifdef HAVE_NDO_SET_FEATURES
 #ifdef HAVE_RHEL6_NET_DEVICE_OPS_EXT
 	set_netdev_hw_features(netdev, hw_features);
@@ -4825,21 +4861,33 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 #endif
 #endif /* HAVE_NDO_SET_FEATURES */
 
-#ifdef HAVE_NETDEV_VLAN_FEATURES
-#ifdef NETIF_F_TSO
-	netdev->vlan_features |= NETIF_F_TSO;
-#ifdef NETIF_F_TSO6
-	netdev->vlan_features |= NETIF_F_TSO6;
-#endif /* NETIF_F_TSO6 */
-#endif /* NETIF_F_TSO */
-	netdev->vlan_features |= NETIF_F_IP_CSUM;
-	netdev->vlan_features |= NETIF_F_SG;
-
-#endif /* HAVE_NETDEV_VLAN_FEATURES */
-
 	if (pci_using_dac)
 		netdev->features |= NETIF_F_HIGHDMA;
 
+#ifdef HAVE_NETDEV_VLAN_FEATURES
+	netdev->vlan_features |= netdev->features;
+#ifdef NETIF_F_GSO_PARTIAL
+	netdev->vlan_features |= NETIF_F_TSO_MANGLEID;
+#endif
+#endif /* HAVE_NETDEV_VLAN_FEATURES */
+#ifdef HAVE_MPLS_FEATURES
+	netdev->mpls_features |= NETIF_F_HW_CSUM;
+#endif
+#ifdef HAVE_SKB_INNER_NETWORK_HEADER
+	netdev->hw_enc_features |= netdev->vlan_features;
+#endif
+
+	/* set this bit last since it cannot be part of vlan_features */
+#ifdef NETIF_F_HW_VLAN_CTAG_TX
+	netdev->features |= NETIF_F_HW_VLAN_CTAG_TX |
+			    NETIF_F_HW_VLAN_CTAG_RX |
+			    NETIF_F_HW_VLAN_CTAG_FILTER;
+#endif
+#ifdef NETIF_F_HW_VLAN_TX
+	netdev->features |= NETIF_F_HW_VLAN_TX |
+			    NETIF_F_HW_VLAN_RX |
+			    NETIF_F_HW_VLAN_FILTER;
+#endif
 	/* The HW MAC address was set and/or determined in sw_init */
 	ether_addr_copy(netdev->dev_addr, adapter->hw.mac.addr);
 	ether_addr_copy(netdev->perm_addr, adapter->hw.mac.addr);
@@ -4898,6 +4946,12 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	netif_tx_stop_all_queues(netdev);
 	ixgbevf_init_last_counter_stats(adapter);
 
+	/* print the MAC address */
+	dev_info(&pdev->dev, "%02x:%02x:%02x:%02x:%02x:%02x\n",
+		 netdev->dev_addr[0], netdev->dev_addr[1],
+		 netdev->dev_addr[2], netdev->dev_addr[3],
+		 netdev->dev_addr[4], netdev->dev_addr[5]);
+
 	switch (hw->mac.type) {
 	case ixgbe_mac_X550_vf:
 		DPRINTK(PROBE, INFO, "Intel(R) X550 Virtual Function\n");
@@ -4911,17 +4965,12 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 		break;
 	}
 
-	/* print the MAC address */
-	for (i = 0; i < 6; i++)
-		printk("%2.2x%c", netdev->dev_addr[i], i == 5 ? '\n' : ':');
-
 #ifdef NETIF_F_GRO
         if (netdev->features & NETIF_F_GRO)
                 DPRINTK(PROBE, INFO, "GRO is enabled\n");
 #endif
 
 	DPRINTK(PROBE, INFO, "%s\n", ixgbevf_driver_string);
-	cards_found++;
 	return 0;
 
 err_register:
@@ -4961,7 +5010,7 @@ static void __devexit ixgbevf_remove(struct pci_dev *pdev)
 
 	adapter = netdev_priv(netdev);
 
-	set_bit(__IXGBEVF_REMOVE, &adapter->state);
+	set_bit(__IXGBEVF_REMOVING, &adapter->state);
 	cancel_work_sync(&adapter->service_task);
 
 	if (netdev->reg_state == NETREG_REGISTERED)
