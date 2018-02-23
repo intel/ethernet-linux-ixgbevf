@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2017 Intel Corporation.
+  Copyright(c) 1999 - 2018 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -56,12 +56,12 @@
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.3.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.3.4) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2017 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2018 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -204,7 +204,7 @@ static u32 ixgbevf_validate_register_read(struct ixgbe_hw *hw, u32 reg)
 	u32 value;
 	u8 __iomem *reg_addr;
 
-	reg_addr = ACCESS_ONCE(hw->hw_addr);
+	reg_addr = READ_ONCE(hw->hw_addr);
 	if (IXGBE_REMOVED(reg_addr))
 		return IXGBE_FAILED_READ_REG;
 	for (i = 0; i < IXGBE_DEAD_READ_RETRIES; ++i) {
@@ -225,7 +225,7 @@ u32 ixgbe_read_reg(struct ixgbe_hw *hw, u32 reg)
 	u32 value;
 	u8 __iomem *reg_addr;
 
-	reg_addr = ACCESS_ONCE(hw->hw_addr);
+	reg_addr = READ_ONCE(hw->hw_addr);
 	if (IXGBE_REMOVED(reg_addr))
 		return IXGBE_FAILED_READ_REG;
 	value = readl(reg_addr + reg);
@@ -3246,11 +3246,12 @@ void ixgbevf_update_stats(struct ixgbevf_adapter *adapter)
 
 /**
  * ixgbevf_service_timer - Timer Call-back
- * @data: pointer to adapter cast into an unsigned long
+ * @t: pointer to timer_list struct
  **/
-static void ixgbevf_service_timer(unsigned long data)
+static void ixgbevf_service_timer(struct timer_list *t)
 {
-	struct ixgbevf_adapter *adapter = (struct ixgbevf_adapter *)data;
+	struct ixgbevf_adapter *adapter = from_timer(adapter, t,
+						     service_timer);
 
 	/* Reset the timer */
 	mod_timer(&adapter->service_timer, (HZ * 2) + jiffies);
@@ -4919,8 +4920,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	}
 
 #endif
-	setup_timer(&adapter->service_timer, &ixgbevf_service_timer,
-		    (unsigned long) adapter);
+	timer_setup(&adapter->service_timer, ixgbevf_service_timer, 0);
 
 	if (IXGBE_REMOVED(hw->hw_addr)) {
 		err = -EIO;
