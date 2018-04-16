@@ -56,7 +56,7 @@
 
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.3.4) RELEASE_TAG
+#define DRV_VERSION __stringify(4.3.5) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -4635,7 +4635,11 @@ static const struct net_device_ops ixgbevf_netdev_ops = {
 #endif
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_set_mac_address	= ixgbevf_set_mac,
+#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
+	.extended.ndo_change_mtu = ixgbevf_change_mtu,
+#else
 	.ndo_change_mtu		= ixgbevf_change_mtu,
+#endif
 #ifdef ETHTOOL_OPS_COMPAT
 	.ndo_do_ioctl		= ixgbevf_ioctl,
 #endif
@@ -4719,6 +4723,9 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 {
 	struct net_device *netdev;
 	struct ixgbevf_adapter *adapter = NULL;
+#ifdef HAVE_NETDEVICE_MIN_MAX_MTU
+	unsigned int min_mtu, max_mtu;
+#endif
 	struct ixgbe_hw *hw = NULL;
 	int err, pci_using_dac;
 	const struct ixgbevf_info *ei = ixgbevf_info_tbl[ent->driver_data];
@@ -4899,27 +4906,35 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 		err = -EIO;
 		goto err_sw_init;
 	}
-
 #ifdef HAVE_NETDEVICE_MIN_MAX_MTU
+
 	/* MTU range: 68 - 1504 or 9710 */
-	netdev->min_mtu = ETH_MIN_MTU;
+	min_mtu = ETH_MIN_MTU;
 	switch (adapter->hw.api_version) {
 	case ixgbe_mbox_api_11:
 	case ixgbe_mbox_api_12:
 	case ixgbe_mbox_api_13:
-		netdev->max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
-				  (ETH_HLEN + ETH_FCS_LEN);
+		max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
+			  (ETH_HLEN + ETH_FCS_LEN);
 		break;
 	default:
 		if (adapter->hw.mac.type != ixgbe_mac_82599_vf)
-			netdev->max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
-					  (ETH_HLEN + ETH_FCS_LEN);
+			max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
+				  (ETH_HLEN + ETH_FCS_LEN);
 		else
-			netdev->max_mtu = ETH_DATA_LEN + ETH_FCS_LEN;
+			max_mtu = ETH_DATA_LEN + ETH_FCS_LEN;
 		break;
 	}
 
+#ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
+	netdev->extended->min_mtu = min_mtu;
+	netdev->extended->max_mtu = max_mtu;
+#else
+	netdev->min_mtu = min_mtu;
+	netdev->max_mtu = max_mtu;
 #endif
+#endif
+
 	timer_setup(&adapter->service_timer, ixgbevf_service_timer, 0);
 
 	if (IXGBE_REMOVED(hw->hw_addr)) {
