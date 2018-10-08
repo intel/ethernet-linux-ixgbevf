@@ -1,26 +1,5 @@
-/*******************************************************************************
-
-  Intel(R) 10GbE PCI Express Virtual Function Driver
-  Copyright(c) 1999 - 2018 Intel Corporation.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
-
-*******************************************************************************/
+// SPDX-License-Identifier: GPL-2.0
+/* Copyright(c) 1999 - 2018 Intel Corporation. */
 
 /* ethtool support for ixgbe */
 
@@ -79,13 +58,16 @@ static struct ixgbe_stats ixgbe_gstrings_stats[] = {
 	IXGBEVF_STAT("tx_timeout_count", tx_timeout_count),
 	IXGBEVF_NETDEV_STAT(multicast),
 	IXGBEVF_STAT("rx_csum_offload_errors", hw_csum_rx_error),
+	IXGBEVF_STAT("alloc_rx_page", alloc_rx_page),
+	IXGBEVF_STAT("alloc_rx_page_failed", alloc_rx_page_failed),
+	IXGBEVF_STAT("alloc_rx_buff_failed", alloc_rx_buff_failed),
 };
 
-#define IXGBEVF_QUEUE_STATS_LEN \
-           ((((struct ixgbevf_adapter *)netdev_priv(netdev))->num_tx_queues + \
-	     ((struct ixgbevf_adapter *)netdev_priv(netdev))->num_rx_queues) * \
-	     (sizeof(struct ixgbevf_stats) / sizeof(u64)))
-
+#define IXGBEVF_QUEUE_STATS_LEN ( \
+	(((struct ixgbevf_adapter *)netdev_priv(netdev))->num_tx_queues + \
+	 ((struct ixgbevf_adapter *)netdev_priv(netdev))->num_xdp_queues + \
+	 ((struct ixgbevf_adapter *)netdev_priv(netdev))->num_rx_queues) * \
+	 (sizeof(struct ixgbevf_stats) / sizeof(u64)))
 #define IXGBEVF_GLOBAL_STATS_LEN	ARRAY_SIZE(ixgbe_gstrings_stats)
 
 #define IXGBEVF_STATS_LEN (IXGBEVF_GLOBAL_STATS_LEN + IXGBEVF_QUEUE_STATS_LEN)
@@ -98,6 +80,14 @@ static const char ixgbe_gstrings_test[][ETH_GSTRING_LEN] = {
 #define IXGBEVF_TEST_LEN (sizeof(ixgbe_gstrings_test) / ETH_GSTRING_LEN)
 #endif /* ETHTOOL_TEST */
 
+#if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+static const char ixgbevf_priv_flags_strings[][ETH_GSTRING_LEN] = {
+#define IXGBEVF_PRIV_FLAGS_LEGACY_RX	BIT(0)
+	"legacy-rx",
+};
+
+#define IXGBEVF_PRIV_FLAGS_STR_LEN ARRAY_SIZE(ixgbevf_priv_flags_strings)
+#endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 static int ixgbevf_get_link_ksettings(struct net_device *netdev,
 				      struct ethtool_link_ksettings *cmd)
@@ -404,6 +394,10 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 		sizeof(drvinfo->version));
 	strlcpy(drvinfo->bus_info, pci_name(adapter->pdev),
 		sizeof(drvinfo->bus_info));
+#if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+
+	drvinfo->n_priv_flags = IXGBEVF_PRIV_FLAGS_STR_LEN;
+#endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 }
 
 static void ixgbevf_get_ringparam(struct net_device *netdev,
@@ -422,8 +416,8 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbevf_ring *tx_ring = NULL, *rx_ring = NULL;
-	int i, err = 0;
 	u32 new_rx_count, new_tx_count;
+	int i, j, err = 0;
 
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
 		return -EINVAL;
@@ -436,31 +430,30 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 	new_tx_count = min(new_tx_count, (u32)IXGBEVF_MAX_TXD);
 	new_tx_count = ALIGN(new_tx_count, IXGBE_REQ_TX_DESCRIPTOR_MULTIPLE);
 
+	/* if nothing to do return success */
 	if ((new_tx_count == adapter->tx_ring_count) &&
-	    (new_rx_count == adapter->rx_ring_count)) {
-		/* nothing to do */
+	    (new_rx_count == adapter->rx_ring_count))
 		return 0;
-	}
 
 	while (test_and_set_bit(__IXGBEVF_RESETTING, &adapter->state))
 		msleep(1);
 
-	/*
-	 * If the adapter isn't up and running then just set the
-	 * new parameters and scurry for the exits.
-	 */
 	if (!netif_running(adapter->netdev)) {
 		for (i = 0; i < adapter->num_tx_queues; i++)
 			adapter->tx_ring[i]->count = new_tx_count;
+		for (i = 0; i < adapter->num_xdp_queues; i++)
+			adapter->xdp_ring[i]->count = new_tx_count;
 		for (i = 0; i < adapter->num_rx_queues; i++)
 			adapter->rx_ring[i]->count = new_rx_count;
 		adapter->tx_ring_count = new_tx_count;
+		adapter->xdp_ring_count = new_tx_count;
 		adapter->rx_ring_count = new_rx_count;
 		goto clear_reset;
 	}
 
 	if (new_tx_count != adapter->tx_ring_count) {
-		tx_ring = vmalloc(adapter->num_tx_queues * sizeof(*tx_ring));
+		tx_ring = vmalloc((adapter->num_tx_queues +
+				   adapter->num_xdp_queues) * sizeof(*tx_ring));
 		if (!tx_ring) {
 			err = -ENOMEM;
 			goto clear_reset;
@@ -469,6 +462,24 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 		for (i = 0; i < adapter->num_tx_queues; i++) {
 			/* clone ring and setup updated count */
 			tx_ring[i] = *adapter->tx_ring[i];
+			tx_ring[i].count = new_tx_count;
+			err = ixgbevf_setup_tx_resources(&tx_ring[i]);
+			if (err) {
+				while (i) {
+					i--;
+					ixgbevf_free_tx_resources(&tx_ring[i]);
+				}
+
+				vfree(tx_ring);
+				tx_ring = NULL;
+
+				goto clear_reset;
+			}
+		}
+
+		for (j = 0; j < adapter->num_xdp_queues; i++, j++) {
+			/* clone ring and setup updated count */
+			tx_ring[i] = *adapter->xdp_ring[j];
 			tx_ring[i].count = new_tx_count;
 			err = ixgbevf_setup_tx_resources(&tx_ring[i]);
 			if (err) {
@@ -495,8 +506,15 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 		for (i = 0; i < adapter->num_rx_queues; i++) {
 			/* clone ring and setup updated count */
 			rx_ring[i] = *adapter->rx_ring[i];
+#ifdef HAVE_XDP_BUFF_RXQ
+
+			/* Clear copied XDP RX-queue info */
+			memset(&rx_ring[i].xdp_rxq, 0,
+			       sizeof(rx_ring[i].xdp_rxq));
+#endif /* HAVE_XDP_BUFF_RXQ */
+
 			rx_ring[i].count = new_rx_count;
-			err = ixgbevf_setup_rx_resources(&rx_ring[i]);
+			err = ixgbevf_setup_rx_resources(adapter, &rx_ring[i]);
 			if (err) {
 				while (i) {
 					i--;
@@ -522,6 +540,12 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 		}
 		adapter->tx_ring_count = new_tx_count;
 
+		for (j = 0; j < adapter->num_xdp_queues; i++, j++) {
+			ixgbevf_free_tx_resources(adapter->xdp_ring[j]);
+			*adapter->xdp_ring[j] = tx_ring[i];
+		}
+		adapter->xdp_ring_count = new_tx_count;
+
 		vfree(tx_ring);
 		tx_ring = NULL;
 	}
@@ -544,7 +568,8 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 clear_reset:
 	/* free Tx resources if Rx error is encountered */
 	if (tx_ring) {
-		for (i = 0; i < adapter->num_tx_queues; i++)
+		for (i = 0;
+		     i < adapter->num_tx_queues + adapter->num_xdp_queues; i++)
 			ixgbevf_free_tx_resources(&tx_ring[i]);
 		vfree(tx_ring);
 	}
@@ -633,6 +658,27 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 #endif
 	}
 
+	/* populate XDP queue data */
+	for (j = 0; j < adapter->num_xdp_queues; j++) {
+		ring = adapter->xdp_ring[j];
+		if (!ring) {
+			data[i++] = 0;
+			data[i++] = 0;
+			continue;
+		}
+
+#ifdef HAVE_NDO_GET_STATS64
+		do {
+			start = u64_stats_fetch_begin_irq(&ring->syncp);
+#endif
+			data[i] = ring->stats.packets;
+			data[i + 1] = ring->stats.bytes;
+#ifdef HAVE_NDO_GET_STATS64
+		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
+#endif
+		i += 2;
+	}
+
 	/* populate Rx queue data */
 	for (j = 0; j < adapter->num_rx_queues; j++) {
 		ring = adapter->rx_ring[j];
@@ -699,6 +745,12 @@ static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 			p += ETH_GSTRING_LEN;
 #endif /* BP_EXTENDED_STATS */
 		}
+		for (i = 0; i < adapter->num_xdp_queues; i++) {
+			sprintf(p, "xdp_queue_%u_packets", i);
+			p += ETH_GSTRING_LEN;
+			sprintf(p, "xdp_queue_%u_bytes", i);
+			p += ETH_GSTRING_LEN;
+		}
 		for (i = 0; i < adapter->num_rx_queues; i++) {
 			sprintf(p, "rx_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
@@ -714,6 +766,12 @@ static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 #endif /* BP_EXTENDED_STATS */
 		}
 		break;
+#if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+	case ETH_SS_PRIV_FLAGS:
+		memcpy(data, ixgbevf_priv_flags_strings,
+		       IXGBEVF_PRIV_FLAGS_STR_LEN * ETH_GSTRING_LEN);
+		break;
+#endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 	}
 }
 
@@ -909,6 +967,10 @@ static int ixgbevf_get_sset_count(struct net_device *netdev, int stringset)
 		return IXGBEVF_TEST_LEN;
 	case ETH_SS_STATS:
 		return IXGBEVF_STATS_LEN;
+#ifdef HAVE_SWIOTLB_SKIP_CPU_SYNC
+	case ETH_SS_PRIV_FLAGS:
+		return IXGBEVF_PRIV_FLAGS_STR_LEN;
+#endif /* HAVE_SWIOTLB_SKIP_CPU_SYNC */
 	default:
 		return -EINVAL;
 	}
@@ -1258,7 +1320,7 @@ static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
 #if defined(ETHTOOL_GRSSH) && defined(ETHTOOL_SRSSH)
 /**
  * ixgbevf_get_reta_locked - get the RSS redirection table (RETA) contents.
- * @adapter: pointer to the port handle
+ * @hw: pointer to the HW structure
  * @reta: buffer to fill with RETA contents.
  * @num_rx_queues: Number of Rx queues configured for this port
  *
@@ -1420,11 +1482,12 @@ static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 #ifdef HAVE_RXFH_HASHFUNC
 	if (hfunc)
 		*hfunc = ETH_RSS_HASH_TOP;
-#endif
 
+#endif
 	if (adapter->hw.mac.type >= ixgbe_mac_X550_vf) {
 		if (key)
-			memcpy(key, adapter->rss_key, sizeof(adapter->rss_key));
+			memcpy(key, adapter->rss_key,
+			       ixgbevf_get_rxfh_key_size(netdev));
 
 		if (indir) {
 			int i;
@@ -1452,8 +1515,41 @@ static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 
 	return err;
 }
-#endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 
+#endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
+#if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+static u32 ixgbevf_get_priv_flags(struct net_device *netdev)
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	u32 priv_flags = 0;
+
+	if (adapter->flags & IXGBEVF_FLAGS_LEGACY_RX)
+		priv_flags |= IXGBEVF_PRIV_FLAGS_LEGACY_RX;
+
+	return priv_flags;
+}
+
+static int ixgbevf_set_priv_flags(struct net_device *netdev, u32 priv_flags)
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	unsigned int flags = adapter->flags;
+
+	flags &= ~IXGBEVF_FLAGS_LEGACY_RX;
+	if (priv_flags & IXGBEVF_PRIV_FLAGS_LEGACY_RX)
+		flags |= IXGBEVF_FLAGS_LEGACY_RX;
+
+	if (flags != adapter->flags) {
+		adapter->flags = flags;
+
+		/* reset interface to repopulate queues */
+		if (netif_running(netdev))
+			ixgbevf_reinit_locked(adapter);
+	}
+
+	return 0;
+}
+
+#endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 static struct ethtool_ops ixgbevf_ethtool_ops = {
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 	.get_link_ksettings	= ixgbevf_get_link_ksettings,
@@ -1513,6 +1609,10 @@ static struct ethtool_ops ixgbevf_ethtool_ops = {
 	.get_rxnfc		= ixgbevf_get_rxnfc,
 	.set_rxnfc		= ixgbevf_set_rxnfc,
 #endif
+#if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+	.get_priv_flags		= ixgbevf_get_priv_flags,
+	.set_priv_flags		= ixgbevf_set_priv_flags,
+#endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 };
 
 #ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
