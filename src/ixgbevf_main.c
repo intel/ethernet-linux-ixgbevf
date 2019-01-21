@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2018 Intel Corporation. */
+/* Copyright(c) 1999 - 2019 Intel Corporation. */
 
 
 /******************************************************************************
@@ -40,12 +40,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.5.1) RELEASE_TAG
+#define DRV_VERSION __stringify(4.5.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2018 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2019 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -5189,7 +5189,9 @@ static int ixgbevf_xdp(struct net_device *dev, struct netdev_xdp *xdp)
 	case XDP_SETUP_PROG:
 		return ixgbevf_xdp_setup(dev, xdp->prog);
 	case XDP_QUERY_PROG:
+#ifndef NO_NETDEV_BPF_PROG_ATTACHED
 		xdp->prog_attached = !!(adapter->xdp_prog);
+#endif /* !NO_NETDEV_BPF_PROG_ATTACHED */
 		xdp->prog_id = adapter->xdp_prog ?
 			       adapter->xdp_prog->aux->id : 0;
 		return 0;

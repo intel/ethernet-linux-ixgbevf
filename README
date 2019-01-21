@@ -28,7 +28,7 @@ Overview
 This virtual function driver supports kernel versions 2.6.x and newer.
 
 This driver supports 82599, X540, X550, and X552-based virtual function devices
-that can only be activated on kernels that support SR-IOV.
+ that can only be activated on kernels that support SR-IOV.
 
 SR-IOV requires the correct platform and OS support.
 
@@ -48,12 +48,12 @@ Configurations later in this document.
 
 VLANs: There is a limit of a total of 64 shared VLANs to 1 or more VFs.
 
-A version of the driver may already be included by your
-distribution and/or the kernel.org kernel.
+A version of the driver may already be included by your distribution and/or the
+kernel.org kernel.
 
 
 Identifying Your Adapter
-------------------------
+========================
 For information on how to identify your adapter, and for the latest Intel
 network drivers, refer to the Intel Support website:
 http://www.intel.com/support
@@ -72,8 +72,12 @@ Note: For the build to work properly, the currently running kernel MUST match
 the version and configuration of the installed kernel sources. If you have just
 recompiled the kernel reboot the system before building.
 
+- To compile the driver on some kernel/arch combinations, a package with the
+development version of libelf (e.g. libelf-dev, libelf-devel,
+elfutilsl-libelf-devel) may need to be installed.
+
 Note: RPM functionality has only been tested in Red Hat distributions.
-_lbank_line_
+
 
 1. Move the virtual function driver tar file to the directory of your choice.
 For
@@ -225,7 +229,7 @@ https://www.linuxfoundation.org/collaborate/workgroups/networking/napi
 
 
 Known Issues/Troubleshooting
-----------------------------
+============================
 
 MAC address of Virtual Function changes unexpectedly
 ----------------------------------------------------
@@ -328,7 +332,7 @@ no longer active. Do this by shutting down all VMs and unloading the VF driver.
 
 
 Support
--------
+=======
 For general information, go to the Intel support website at:
 http://www.intel.com/support/
 
