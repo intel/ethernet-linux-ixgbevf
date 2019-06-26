@@ -114,4 +114,7 @@ enum {
 	uninitialized_var(_t);					\
 } while (0)
 
+#define e_info(msglvl, format, arg...) \
+	netif_info(adapter, msglvl, adapter->netdev, format, ## arg)
+
 #endif /* _IXGBEVF_OSDEP_H_ */

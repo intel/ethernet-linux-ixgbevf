@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.5.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.6.1) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -1111,7 +1111,8 @@ struct sk_buff *ixgbevf_construct_skb(struct ixgbevf_ring *rx_ring,
 	/* Determine available headroom for copy */
 	headlen = size;
 	if (headlen > IXGBEVF_RX_HDR_SIZE)
-		headlen = eth_get_headlen(xdp->data, IXGBEVF_RX_HDR_SIZE);
+		headlen = eth_get_headlen(skb->dev, xdp->data,
+					  IXGBEVF_RX_HDR_SIZE);
 
 	/* align pull length to size of long to optimize memcpy performance */
 	memcpy(__skb_put(skb, headlen), xdp->data,
@@ -3831,7 +3832,7 @@ static void ixgbevf_watchdog_link_is_up(struct ixgbevf_adapter *adapter)
 		speed_str = "unknown speed";
 		break;
 	}
-	dev_info(&adapter->pdev->dev, "NIC Link is Up %s\n", speed_str);
+	e_info(drv, "NIC Link is Up %s\n", speed_str);
 
 	netif_carrier_on(netdev);
 }
@@ -3851,7 +3852,7 @@ static void ixgbevf_watchdog_link_is_down(struct ixgbevf_adapter *adapter)
 	if (!netif_carrier_ok(netdev))
 		return;
 
-	dev_info(&adapter->pdev->dev, "NIC Link is Down\n");
+	e_info(drv, "NIC Link is Down\n");
 
 	netif_carrier_off(netdev);
 }
@@ -4150,7 +4151,7 @@ static void ixgbevf_free_all_rx_resources(struct ixgbevf_adapter *adapter)
  * handler is registered with the OS, the watchdog timer is started,
  * and the stack is notified that the interface is ready.
  **/
-static int ixgbevf_open(struct net_device *netdev)
+int ixgbevf_open(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbe_hw *hw = &adapter->hw;
@@ -4251,7 +4252,7 @@ static void ixgbevf_close_suspend(struct ixgbevf_adapter *adapter)
  * needs to be disabled.  A global MAC reset is issued to stop the
  * hardware, and all transmit and receive resources are freed.
  **/
-static int ixgbevf_close(struct net_device *netdev)
+int ixgbevf_close(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
@@ -4448,6 +4449,9 @@ static void ixgbevf_tx_csum(struct ixgbevf_ring *tx_ring,
 		goto no_csum;
 	}
 
+	if (first->protocol == htons(ETH_P_IP))
+		type_tucmd |= IXGBE_ADVTXD_TUCMD_IPV4;
+
 	/* update TX checksum flag */
 	first->tx_flags |= IXGBE_TX_FLAGS_CSUM;
 	vlan_macip_lens = skb_checksum_start_offset(skb) -
@@ -4642,6 +4646,9 @@ static void ixgbevf_tx_map(struct ixgbevf_ring *tx_ring,
 
 	ixgbevf_maybe_stop_tx(tx_ring, DESC_NEEDED);
 
+	/* software timestamp */
+	skb_tx_timestamp(skb);
+
 #ifdef HAVE_SKB_XMIT_MORE
 	if (!skb->xmit_more || netif_xmit_stopped(txring_txq(tx_ring))) {
 		writel(i, tx_ring->tail);
@@ -4726,9 +4733,6 @@ static int ixgbevf_xmit_frame_ring(struct sk_buff *skb,
 		tx_ring->tx_stats.tx_busy++;
 		return NETDEV_TX_BUSY;
 	}
-
-	/* software timestamp */
-	skb_tx_timestamp(skb);
 
 	/* record the location of the first descriptor for this packet */
 	first = &tx_ring->tx_buffer_info[tx_ring->next_to_use];

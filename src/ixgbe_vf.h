@@ -119,6 +119,7 @@ struct ixgbe_mbx_operations {
 	s32  (*check_for_msg)(struct ixgbe_hw *, u16);
 	s32  (*check_for_ack)(struct ixgbe_hw *, u16);
 	s32  (*check_for_rst)(struct ixgbe_hw *, u16);
+	s32  (*clear)(struct ixgbe_hw *hw, u16 vf_number);
 };
 
 struct ixgbe_mbx_stats {

@@ -24,7 +24,6 @@ Contents
 
 Overview
 --------
-
 This virtual function driver supports kernel versions 2.6.x and newer.
 
 This driver supports 82599, X540, X550, and X552-based virtual function devices
@@ -242,7 +241,6 @@ a VF driver reload.
 
 Hardware Issues
 ---------------
-
 For known hardware and troubleshooting issues, either refer to the "Release
 Notes" in your User Guide, or for more detailed information, go to
 http://www.intel.com.
@@ -254,7 +252,6 @@ information on known hardware issues.
 
 Software Issues
 ---------------
-
 NOTE: After installing the driver, if your Intel Ethernet Network Connection
 is not working, verify that you have installed the correct driver.
 
@@ -319,7 +316,6 @@ This is caused by the way the Linux kernel reports this stressed condition.
 
 Host May Reboot after Removing PF when VF is Active in Guest
 ------------------------------------------------------------
-
 Using kernel versions earlier than 3.2, do not unload the PF driver with
 active VFs. Doing this will cause your VFs to stop working until you reload
 the PF driver and may cause a spontaneous reboot of your system.

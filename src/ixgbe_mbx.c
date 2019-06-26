@@ -355,6 +355,7 @@ void ixgbe_init_mbx_params_vf(struct ixgbe_hw *hw)
 	mbx->ops.check_for_msg = ixgbe_check_for_msg_vf;
 	mbx->ops.check_for_ack = ixgbe_check_for_ack_vf;
 	mbx->ops.check_for_rst = ixgbe_check_for_rst_vf;
+	mbx->ops.clear = NULL;
 
 	mbx->stats.msgs_tx = 0;
 	mbx->stats.msgs_rx = 0;
@@ -560,6 +561,27 @@ out_no_read:
 }
 
 /**
+ *  ixgbe_clear_mbx_pf - Clear Mailbox Memory
+ *  @hw: pointer to the HW structure
+ *  @vf_number: the VF index
+ *
+ *  Set VFMBMEM of given VF to 0x0.
+ **/
+static s32 ixgbe_clear_mbx_pf(struct ixgbe_hw *hw, u16 vf_number)
+{
+	u16 mbx_size = hw->mbx.size;
+	u16 i;
+
+	if (vf_number > 63)
+		return IXGBE_ERR_PARAM;
+
+	for (i = 0; i < mbx_size; ++i)
+		IXGBE_WRITE_REG_ARRAY(hw, IXGBE_PFMBMEM(vf_number), i, 0x0);
+
+	return 0;
+}
+
+/**
  *  ixgbe_init_mbx_params_pf - set initial values for pf mailbox
  *  @hw: pointer to the HW structure
  *
@@ -588,6 +610,7 @@ void ixgbe_init_mbx_params_pf(struct ixgbe_hw *hw)
 	mbx->ops.check_for_msg = ixgbe_check_for_msg_pf;
 	mbx->ops.check_for_ack = ixgbe_check_for_ack_pf;
 	mbx->ops.check_for_rst = ixgbe_check_for_rst_pf;
+	mbx->ops.clear = ixgbe_clear_mbx_pf;
 
 	mbx->stats.msgs_tx = 0;
 	mbx->stats.msgs_rx = 0;
