@@ -176,14 +176,6 @@ struct msix_entry {
 #define PCIE_LINK_STATE_L1 2
 #endif
 
-#ifndef mmiowb
-#ifdef CONFIG_IA64
-#define mmiowb() asm volatile ("mf.a" ::: "memory")
-#else
-#define mmiowb()
-#endif
-#endif
-
 #ifndef SET_NETDEV_DEV
 #define SET_NETDEV_DEV(net, pdev)
 #endif
@@ -4883,6 +4875,11 @@ of_get_mac_address(struct device_node __always_unused *np)
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0) )
 #define netdev_notifier_info_to_dev(ptr) ptr
+#ifndef time_in_range64
+#define time_in_range64(a, b, c) \
+	(time_after_eq64(a, b) && \
+	 time_before_eq64(a, c))
+#endif /* time_in_range64 */
 #if ((RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,6)) ||\
      (SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(11,4,0)))
 #define HAVE_NDO_SET_VF_LINK_STATE
@@ -6334,10 +6331,16 @@ static inline bool __kc_napi_if_scheduled_mark_missed(struct napi_struct *n)
 #endif /* HAVE_AF_XDP_SUPPORT */
 #else /* >= 4.20.0 */
 #define HAVE_AF_XDP_ZC_SUPPORT
+#define HAVE_VXLAN_TYPE
 #endif /* 4.20.0 */
 
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0))
+#if (RHEL_RELEASE_CODE && \
+     RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,7) && \
+     RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0))
+#define HAVE_PTP_SYS_OFFSET_EXTENDED_IOCTL
+#else /* RHEL >= 7.7 && RHEL != 8.0 */
 struct ptp_system_timestamp {
 	struct timespec64 pre_ts;
 	struct timespec64 post_ts;
@@ -6354,15 +6357,23 @@ ptp_read_system_postts(struct ptp_system_timestamp __always_unused *sts)
 {
 	;
 }
+#endif /* !(RHEL >= 7.7 && RHEL != 8.0) */
+#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,1)))
+#define HAVE_NDO_BRIDGE_SETLINK_EXTACK
+#endif /* RHEL 8.1 */
 #else /* >= 5.0.0 */
 #define HAVE_PTP_SYS_OFFSET_EXTENDED_IOCTL
 #define HAVE_NDO_BRIDGE_SETLINK_EXTACK
 #define HAVE_DMA_ALLOC_COHERENT_ZEROES_MEM
+#define HAVE_GENEVE_TYPE
+#define HAVE_TC_INDIR_BLOCK
 #endif /* 5.0.0 */
 
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,1,0))
-
+#if (RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,1)))
+#define HAVE_NDO_FDB_ADD_EXTACK
+#else /* RHEL < 8.1 */
 #ifdef HAVE_TC_SETUP_CLSFLOWER
 #include <net/pkt_cls.h>
 
@@ -6455,6 +6466,7 @@ static inline bool flow_rule_match_key(const struct flow_rule *rule,
 }
 #endif /* HAVE_TC_SETUP_CLSFLOWER */
 
+#endif /* RHEL < 8.1 */
 #else /* >= 5.1.0 */
 #define HAVE_NDO_FDB_ADD_EXTACK
 #define NO_XDP_QUERY_XSK_UMEM
@@ -6463,7 +6475,11 @@ static inline bool flow_rule_match_key(const struct flow_rule *rule,
 
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0))
+#ifdef HAVE_SKB_XMIT_MORE
 #define netdev_xmit_more()	(skb->xmit_more)
+#else
+#define netdev_xmit_more()	(0)
+#endif
 
 #ifndef eth_get_headlen
 static inline u32
@@ -6475,6 +6491,48 @@ __kc_eth_get_headlen(const struct net_device __always_unused *dev, void *data,
 
 #define eth_get_headlen(dev, data, len) __kc_eth_get_headlen(dev, data, len)
 #endif /* !eth_get_headlen */
+
+#ifndef mmiowb
+#ifdef CONFIG_IA64
+#define mmiowb() asm volatile ("mf.a" ::: "memory")
+#else
+#define mmiowb()
+#endif
+#endif /* mmiowb */
+
 #else /* >= 5.2.0 */
+#define SPIN_UNLOCK_IMPLIES_MMIOWB
 #endif /* 5.2.0 */
+
+/*****************************************************************************/
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0))
+#define flow_block_offload tc_block_offload
+#define flow_block_command tc_block_command
+#define flow_block_binder_type tcf_block_binder_type
+#define flow_cls_offload tc_cls_flower_offload
+#define flow_cls_common_offload tc_cls_common_offload
+#define flow_cls_offload_flow_rule tc_cls_flower_offload_flow_rule
+#define FLOW_CLS_REPLACE TC_CLSFLOWER_REPLACE
+#define FLOW_CLS_DESTROY TC_CLSFLOWER_DESTROY
+#define FLOW_CLS_STATS TC_CLSFLOWER_STATS
+#define FLOW_CLS_TMPLT_CREATE TC_CLSFLOWER_TMPLT_CREATE
+#define FLOW_CLS_TMPLT_DESTROY TC_CLSFLOWER_TMPLT_DESTROY
+
+#ifdef HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO
+#include <net/pkt_cls.h>
+
+int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
+				   struct list_head *driver_list,
+				   tc_setup_cb_t *cb,
+				   void *cb_ident, void *cb_priv,
+				   bool ingress_only);
+
+#define flow_block_cb_setup_simple(f, driver_list, cb, cb_ident, cb_priv, \
+				   ingress_only) \
+	_kc_flow_block_cb_setup_simple(f, driver_list, cb, cb_ident, cb_priv, \
+				       ingress_only)
+#endif /* HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO */
+#else /* >= 5.3.0 */
+#define XSK_UMEM_RETURNS_XDP_DESC
+#endif /* 5.3.0 */
 #endif /* _KCOMPAT_H_ */

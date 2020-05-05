@@ -595,10 +595,8 @@ static inline void __ew32(struct ixgbe_hw *hw, unsigned long reg, u32 val)
 #define ew32(reg,val)	IXGBE_WRITE_REG(hw, IXGBE_##reg, (val))
 #define e1e_flush()	er32(STATUS)
 
-#if IS_ENABLED(CONFIG_BQL) || defined(HAVE_SKB_XMIT_MORE)
 static inline struct netdev_queue *txring_txq(const struct ixgbevf_ring *ring)
 {
 	return netdev_get_tx_queue(ring->netdev, ring->queue_index);
 }
-#endif
 #endif /* _IXGBEVF_H_ */

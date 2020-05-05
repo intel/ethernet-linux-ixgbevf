@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.6.1) RELEASE_TAG
+#define DRV_VERSION __stringify(4.6.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -3014,6 +3014,7 @@ void ixgbevf_reinit_locked(struct ixgbevf_adapter *adapter)
 		msleep(1);
 
 	ixgbevf_down(adapter);
+	pci_set_master(adapter->pdev);
 	ixgbevf_up(adapter);
 
 	clear_bit(__IXGBEVF_RESETTING, &adapter->state);
@@ -4649,24 +4650,22 @@ static void ixgbevf_tx_map(struct ixgbevf_ring *tx_ring,
 	/* software timestamp */
 	skb_tx_timestamp(skb);
 
-#ifdef HAVE_SKB_XMIT_MORE
-	if (!skb->xmit_more || netif_xmit_stopped(txring_txq(tx_ring))) {
+	if (!netdev_xmit_more() || netif_xmit_stopped(txring_txq(tx_ring))) {
 		writel(i, tx_ring->tail);
+#ifndef SPIN_UNLOCK_IMPLIES_MMIOWB
 
-		/* we need this if more than one processor can write to our tail
-		 * at a time, it synchronizes IO on IA64/Altix systems
+		/* The following mmiowb() is required on certain
+		 * architechtures (IA64/Altix in particular) in order to
+		 * synchronize the I/O calls with respect to a spin lock. This
+		 * is because the wmb() on those architectures does not
+		 * guarantee anything for posted I/O writes.
+		 *
+		 * Note that the associated spin_unlock() is not within the
+		 * driver code, but in the networking core stack.
 		 */
 		mmiowb();
+#endif /* SPIN_UNLOCK_IMPLIES_MMIOWB */
 	}
-#else
-	/* notify HW of packet */
-	writel(i, tx_ring->tail);
-
-	/* we need this if more than one processor can write to our tail
-	 * at a time, it synchronizes IO on IA64/Altix systems
-	 */
-	mmiowb();
-#endif /* HAVE_SKB_XMIT_MORE */
 
 	return;
 dma_error:
