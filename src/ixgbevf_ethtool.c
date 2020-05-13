@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2019 Intel Corporation. */
+/* Copyright(c) 1999 - 2020 Intel Corporation. */
 
 /* ethtool support for ixgbe */
 
@@ -37,14 +37,14 @@ struct ixgbe_stats {
 #define IXGBEVF_STAT(_name, _stat) { \
 	.stat_string = _name, \
 	.type = IXGBEVF_STATS, \
-	.sizeof_stat = FIELD_SIZEOF(struct ixgbevf_adapter, _stat), \
+	.sizeof_stat = sizeof_field(struct ixgbevf_adapter, _stat), \
 	.stat_offset = offsetof(struct ixgbevf_adapter, _stat) \
 }
 
 #define IXGBEVF_NETDEV_STAT(_net_stat) { \
 	.stat_string = #_net_stat, \
 	.type = NETDEV_STATS, \
-	.sizeof_stat = FIELD_SIZEOF(struct net_device_stats, _net_stat), \
+	.sizeof_stat = sizeof_field(struct net_device_stats, _net_stat), \
 	.stat_offset = offsetof(struct net_device_stats, _net_stat) \
 }
 
@@ -97,9 +97,6 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 #endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
-	struct ixgbe_hw *hw = &adapter->hw;
-	u32 link_speed = 0;
-	bool link_up;
 
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 	ethtool_link_ksettings_zero_link_mode(cmd, supported);
@@ -114,22 +111,10 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 	ecmd->port = -1;
 #endif
 
-	if (!in_interrupt()) {
-		hw->mac.get_link_status = 1;
-		hw->mac.ops.check_link(hw, &link_speed, &link_up, false);
-	} else {
-		/*
-		 * this case is a special workaround for RHEL5 bonding
-		 * that calls this routine from interrupt context
-		 */
-		link_speed = adapter->link_speed;
-		link_up = adapter->link_up;
-	}
-
-	if (link_up) {
+	if (adapter->link_up) {
 		__u32 speed = SPEED_10000;
 
-		switch(link_speed) {
+		switch (adapter->link_speed) {
 		case IXGBE_LINK_SPEED_10GB_FULL:
 			speed = SPEED_10000;
 			break;
@@ -732,36 +717,48 @@ static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 		}
 
 		for (i = 0; i < adapter->num_tx_queues; i++) {
-			sprintf(p, "tx_queue_%u_packets", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "tx_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "tx_queue_%u_bytes", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "tx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
 #ifdef BP_EXTENDED_STATS
-			sprintf(p, "tx_queue_%u_bp_napi_yield", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "tx_queue_%u_bp_napi_yield", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "tx_queue_%u_bp_misses", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "tx_queue_%u_bp_misses", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "tx_queue_%u_bp_cleaned", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "tx_queue_%u_bp_cleaned", i);
 			p += ETH_GSTRING_LEN;
 #endif /* BP_EXTENDED_STATS */
 		}
 		for (i = 0; i < adapter->num_xdp_queues; i++) {
-			sprintf(p, "xdp_queue_%u_packets", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "xdp_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "xdp_queue_%u_bytes", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "xdp_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
 		}
 		for (i = 0; i < adapter->num_rx_queues; i++) {
-			sprintf(p, "rx_queue_%u_packets", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "rx_queue_%u_packets", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "rx_queue_%u_bytes", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "rx_queue_%u_bytes", i);
 			p += ETH_GSTRING_LEN;
 #ifdef BP_EXTENDED_STATS
-			sprintf(p, "rx_queue_%u_bp_poll_yield", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "rx_queue_%u_bp_poll_yield", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "rx_queue_%u_bp_misses", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "rx_queue_%u_bp_misses", i);
 			p += ETH_GSTRING_LEN;
-			sprintf(p, "rx_queue_%u_bp_cleaned", i);
+			snprintf(p, ETH_GSTRING_LEN,
+				 "rx_queue_%u_bp_cleaned", i);
 			p += ETH_GSTRING_LEN;
 #endif /* BP_EXTENDED_STATS */
 		}

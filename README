@@ -239,7 +239,7 @@ MAC address of the underlying PF (Physical Function) device.
 
 NAPI
 ----
-NAPI (Rx polling mode) is supported in the ixgbevf driver.
+This driver supports NAPI (Rx polling mode).
 For more information on NAPI, see
 https://www.linuxfoundation.org/collaborate/workgroups/networking/napi
 
@@ -378,8 +378,8 @@ Copyright(c) 1999 - 2019 Intel Corporation.
 
 Trademarks
 ==========
-Intel and Itanium are trademarks or registered trademarks of Intel Corporation
-or its subsidiaries in the United States and/or other countries.
+Intel is a trademark or registered trademark of Intel Corporation or its
+subsidiaries in the United States and/or other countries.
 
 * Other names and brands may be claimed as the property of others.
 

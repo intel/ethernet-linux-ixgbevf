@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2019 Intel Corporation. */
+/* Copyright(c) 1999 - 2020 Intel Corporation. */
 
 #include "ixgbevf.h"
 #include "kcompat.h"
@@ -1564,7 +1564,27 @@ int __kc_pcie_get_minimum_link(struct pci_dev *dev, enum pci_bus_speed *speed,
 	return 0;
 }
 
-#endif
+#if (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(6,7))
+int _kc_pci_wait_for_pending_transaction(struct pci_dev *dev)
+{
+	int i;
+	u16 status;
+
+	/* Wait for Transaction Pending bit clean */
+	for (i = 0; i < 4; i++) {
+		if (i)
+			msleep((1 << (i - 1)) * 100);
+
+		pcie_capability_read_word(dev, PCI_EXP_DEVSTA, &status);
+		if (!(status & PCI_EXP_DEVSTA_TRPND))
+			return 1;
+	}
+
+	return 0;
+}
+#endif /* <RHEL6.7 */
+
+#endif /* <3.12 */
 
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) )
 int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask)
@@ -2444,6 +2464,30 @@ void flow_rule_match_enc_keyid(const struct flow_rule *rule,
 {
 	FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_KEYID, out);
 }
+
+void flow_rule_match_enc_ports(const struct flow_rule *rule,
+			       struct flow_match_ports *out)
+{
+	FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_PORTS, out);
+}
+
+void flow_rule_match_enc_control(const struct flow_rule *rule,
+				 struct flow_match_control *out)
+{
+	FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_CONTROL, out);
+}
+
+void flow_rule_match_enc_ipv4_addrs(const struct flow_rule *rule,
+				    struct flow_match_ipv4_addrs *out)
+{
+	FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_IPV4_ADDRS, out);
+}
+
+void flow_rule_match_enc_ipv6_addrs(const struct flow_rule *rule,
+				    struct flow_match_ipv6_addrs *out)
+{
+	FLOW_DISSECTOR_MATCH(rule, FLOW_DISSECTOR_KEY_ENC_IPV6_ADDRS, out);
+}
 #endif
 
 #ifndef HAVE_TC_FLOWER_VLAN_IN_TAGS
@@ -2477,6 +2521,7 @@ void flow_rule_match_ports(const struct flow_rule *rule,
 
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,3,0))
+#if (!(RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8,2))))
 #ifdef HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO
 int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
 				   struct list_head __always_unused *driver_list,
@@ -2505,4 +2550,5 @@ int _kc_flow_block_cb_setup_simple(struct flow_block_offload *f,
 	}
 }
 #endif /* HAVE_TC_CB_AND_SETUP_QDISC_MQPRIO */
+#endif /* !RHEL >= 8.2 */
 #endif /* 5.3.0 */

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2019 Intel Corporation. */
+/* Copyright(c) 1999 - 2020 Intel Corporation. */
 
 #ifndef _IXGBEVF_H_
 #define _IXGBEVF_H_
@@ -526,6 +526,7 @@ struct ixgbevf_adapter {
 	u32 *rss_key;
 	u8 rss_indir_tbl[IXGBEVF_X550_VFRETA_SIZE];
 	u32 flags;
+	bool irqs_ready;
 #define IXGBE_FLAG_RX_CSUM_ENABLED		BIT(1)
 #define IXGBEVF_FLAGS_LEGACY_RX			BIT(2)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP		BIT(4)

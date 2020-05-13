@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2019 Intel Corporation. */
+/* Copyright(c) 1999 - 2020 Intel Corporation. */
 
 
 /******************************************************************************
@@ -40,12 +40,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.6.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.7.1) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2019 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2020 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -330,8 +330,13 @@ static void ixgbevf_tx_timeout_reset(struct ixgbevf_adapter *adapter)
 /**
  * ixgbevf_tx_timeout - Respond to a Tx Hang
  * @netdev: network interface device structure
+ * @txqueue: specific tx queue
  **/
+#ifdef HAVE_TX_TIMEOUT_TXQUEUE
+static void ixgbevf_tx_timeout(struct net_device *netdev, unsigned int txqueue)
+#else
 static void ixgbevf_tx_timeout(struct net_device *netdev)
+#endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
@@ -1891,6 +1896,8 @@ static int ixgbevf_request_msix_irqs(struct ixgbevf_adapter *adapter)
 		goto free_queue_irqs;
 	}
 
+	adapter->irqs_ready = true;
+
 	return 0;
 
 free_queue_irqs:
@@ -1938,6 +1945,11 @@ static void ixgbevf_free_irq(struct ixgbevf_adapter *adapter)
 
 	if (!adapter->msix_entries)
 		return;
+
+	if (!adapter->irqs_ready)
+		return;
+
+	adapter->irqs_ready = false;
 
 	for (vector = 0; vector < adapter->num_q_vectors; vector++) {
 		struct ixgbevf_q_vector *q_vector = adapter->q_vector[vector];
@@ -3613,6 +3625,8 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 	/* enable rx csum by default */
 	adapter->flags |= IXGBE_FLAG_RX_CSUM_ENABLED;
 
+	adapter->irqs_ready = false;
+
 	set_bit(__IXGBEVF_DOWN, &adapter->state);
 
 	return 0;
@@ -4546,7 +4560,7 @@ static void ixgbevf_tx_map(struct ixgbevf_ring *tx_ring,
 	struct sk_buff *skb = first->skb;
 	struct ixgbevf_tx_buffer *tx_buffer;
 	union ixgbe_adv_tx_desc *tx_desc;
-	struct skb_frag_struct *frag;
+	skb_frag_t *frag;
 	dma_addr_t dma;
 	unsigned int data_len, size;
 	u32 tx_flags = first->tx_flags;
@@ -4726,7 +4740,8 @@ static int ixgbevf_xmit_frame_ring(struct sk_buff *skb,
 	 * otherwise try next time
 	 */
 	for (f = 0; f < skb_shinfo(skb)->nr_frags; f++)
-		count += TXD_USE_COUNT(skb_shinfo(skb)->frags[f].size);
+		count += TXD_USE_COUNT(skb_frag_size(&skb_shinfo(skb)->
+						     frags[f]));
 
 	if (ixgbevf_maybe_stop_tx(tx_ring, count + 3)) {
 		tx_ring->tx_stats.tx_busy++;
@@ -5032,13 +5047,16 @@ static struct rtnl_link_stats64 *ixgbevf_get_stats64(struct net_device *netdev,
 	rcu_read_lock();
 	for (i = 0; i < adapter->num_rx_queues; i++) {
 		ring = adapter->rx_ring[i];
-		do {
-			start = u64_stats_fetch_begin_irq(&ring->syncp);
-			bytes = ring->stats.bytes;
-			packets = ring->stats.packets;
-		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
-		stats->rx_bytes += bytes;
-		stats->rx_packets += packets;
+		if (ring) {
+			do {
+				start = u64_stats_fetch_begin_irq(&ring->syncp);
+				bytes = ring->stats.bytes;
+				packets = ring->stats.packets;
+			} while (u64_stats_fetch_retry_irq(&ring->syncp,
+							   start));
+			stats->rx_bytes += bytes;
+			stats->rx_packets += packets;
+		}
 	}
 
 	for (i = 0; i < adapter->num_tx_queues; i++) {
@@ -5546,7 +5564,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_sw_init;
 
-	strcpy(netdev->name, "eth%d");
+	strscpy(netdev->name, "eth%d", sizeof(netdev->name));
 
 	err = register_netdev(netdev);
 	if (err)
@@ -5730,6 +5748,33 @@ static void ixgbevf_io_resume(struct pci_dev *pdev)
 	rtnl_unlock();
 }
 
+#if defined(HAVE_RHEL7_PCI_RESET_NOTIFY) || \
+	defined(HAVE_PCI_ERROR_HANDLER_RESET_NOTIFY)
+static void ixgbevf_io_reset_notify(struct pci_dev *pdev, bool prepare)
+{
+	if (prepare)
+		ixgbevf_suspend(pdev, PMSG_SUSPEND);
+#ifdef CONFIG_PM
+	else
+		ixgbevf_resume(pdev);
+#endif
+}
+
+#endif
+#ifdef HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
+static void pci_io_reset_prepare(struct pci_dev *pdev)
+{
+	ixgbevf_suspend(pdev, PMSG_SUSPEND);
+}
+
+static void pci_io_reset_done(struct pci_dev *pdev)
+{
+#ifdef CONFIG_PM
+	ixgbevf_resume(pdev);
+#endif
+}
+
+#endif
 struct net_device *ixgbevf_hw_to_netdev(const struct ixgbe_hw *hw)
 {
 	return ((struct ixgbevf_adapter *)hw->back)->netdev;
@@ -5746,9 +5791,23 @@ struct ixgbevf_msg *ixgbevf_hw_to_msg(const struct ixgbe_hw *hw)
 static struct pci_error_handlers ixgbevf_err_handler = {
 	.error_detected = ixgbevf_io_error_detected,
 	.slot_reset = ixgbevf_io_slot_reset,
+#ifdef HAVE_PCI_ERROR_HANDLER_RESET_NOTIFY
+	.reset_notify = ixgbevf_io_reset_notify,
+#endif
+#ifdef HAVE_PCI_ERROR_HANDLER_RESET_PREPARE
+	.reset_prepare = pci_io_reset_prepare,
+	.reset_done = pci_io_reset_done,
+#endif
 	.resume = ixgbevf_io_resume,
 };
 
+#ifdef HAVE_RHEL7_PCI_RESET_NOTIFY
+static struct pci_driver_rh ixgbevf_driver_rh = {
+	.size = sizeof(struct pci_driver_rh),
+	.reset_notify   = ixgbevf_io_reset_notify,
+};
+
+#endif
 static struct pci_driver ixgbevf_driver = {
 	.name     = ixgbevf_driver_name,
 	.id_table = ixgbevf_pci_tbl,
@@ -5762,7 +5821,10 @@ static struct pci_driver ixgbevf_driver = {
 #ifndef USE_REBOOT_NOTIFIER
 	.shutdown = ixgbevf_shutdown,
 #endif
-	.err_handler = &ixgbevf_err_handler
+	.err_handler = &ixgbevf_err_handler,
+#ifdef HAVE_RHEL7_PCI_RESET_NOTIFY
+	.pci_driver_rh = &ixgbevf_driver_rh,
+#endif
 };
 
 /**
