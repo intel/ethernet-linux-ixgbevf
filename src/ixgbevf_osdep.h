@@ -18,7 +18,7 @@
 
 
 #ifdef DBG
-#define hw_dbg(hw, S, A...)	printk(KERN_DEBUG S, ## A)
+#define hw_dbg(hw, S, A...)	netdev_dbg(ixgbevf_hw_to_netdev(hw),  S, ## A)
 #else
 #define hw_dbg(hw, S, A...)      do {} while (0)
 #endif

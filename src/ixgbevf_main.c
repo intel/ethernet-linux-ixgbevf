@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.7.1) RELEASE_TAG
+#define DRV_VERSION __stringify(4.8.1) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -2410,7 +2410,7 @@ static void ixgbevf_vlan_rx_add_vid(struct net_device *netdev, u16 vid)
 	spin_unlock_bh(&adapter->mbx_lock);
 
 	if (ret_val) {
-		printk(KERN_ERR "VF could not set VLAN %d\n", vid);
+		netdev_err(netdev, "VF could not set VLAN %d\n", vid);
 	} else {
 #ifndef HAVE_NETDEV_VLAN_FEATURES
 
@@ -5836,10 +5836,10 @@ static struct pci_driver ixgbevf_driver = {
 static int __init ixgbevf_init_module(void)
 {
 	int ret;
-	printk(KERN_INFO "ixgbevf: %s - version %s\n", ixgbevf_driver_string,
-	       ixgbevf_driver_version);
+	pr_info("ixgbevf: %s - version %s\n", ixgbevf_driver_string,
+		ixgbevf_driver_version);
 
-	printk(KERN_INFO "%s\n", ixgbevf_copyright);
+	pr_info("ixgbevf: %s\n", ixgbevf_copyright);
 
 	ret = pci_register_driver(&ixgbevf_driver);
 	return ret;

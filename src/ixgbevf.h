@@ -36,11 +36,10 @@
 #endif
 #endif /* CONFIG_NET_RX_BUSY_POLL */
 
-#define PFX "ixgbevf: "
 #define DPRINTK(nlevel, klevel, fmt, args...) \
-	((void)((NETIF_MSG_##nlevel & adapter->msg_enable) && \
-	printk(KERN_##klevel PFX "%s: %s: " fmt, adapter->netdev->name, \
-		__FUNCTION__ , ## args)))
+	((NETIF_MSG_##nlevel & adapter->msg_enable) ? \
+	(void)(netdev_printk(KERN_##klevel, adapter->netdev, \
+	"%s: " fmt, __func__, ## args)) : NULL)
 
 #define IXGBE_MAX_TXD_PWR	14
 #define IXGBE_MAX_DATA_PER_TXD	(1 << IXGBE_MAX_TXD_PWR)

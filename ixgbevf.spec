@@ -1,6 +1,6 @@
 Name: ixgbevf
 Summary: Intel(R) 10GbE PCI Express Virtual Function Driver
-Version: 4.7.1
+Version: 4.8.1
 Release: 1
 Source: %{name}-%{version}.tar.gz
 Vendor: Intel Corporation
@@ -17,7 +17,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root
 %define _pcitable /usr/share/kudzu/pcitable /usr/share/hwdata/pcitable /dev/null
 %define pciids    %find %{_pciids}
 %define pcitable  %find %{_pcitable}
-Requires: kernel, fileutils, findutils, gawk, bash
+Requires: kernel, findutils, gawk, bash
 
 # Check for existence of %kernel_module_package_buildreqs ...
 %if 0%{?!kernel_module_package_buildreqs:1}

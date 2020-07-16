@@ -3,7 +3,7 @@ ixgbevf Linux* Virtual Function (VF) Driver for Intel(R) Ethernet Network
 Connection
 ================================================================================
 
-October 11, 2019
+June 8, 2020
 
 ================================================================================
 
@@ -203,7 +203,7 @@ and want to set the interrupt mode to MSI-X and MSI, respectively, add the
 following to modules.conf or /etc/modprobe.conf:
   alias eth0 ixgbevf
   alias eth1 ixgbevf
-  options ixgbevf InterruptThrottleRate=3,1
+  options ixgbevf IntMode=2,1
 
 
 Viewing Link Messages
@@ -232,7 +232,7 @@ checking if the MACVLAN driver is loaded. You can run 'lsmod | grep macvlan' to
 see if the MACVLAN driver is loaded or run 'modprobe macvlan' to try to load
 the MACVLAN driver.
 
-NOTES:
+NOTE:
 - In passthru mode, you can only set up one MACVLAN device. It will inherit the
 MAC address of the underlying PF (Physical Function) device.
 
@@ -246,15 +246,6 @@ https://www.linuxfoundation.org/collaborate/workgroups/networking/napi
 
 Known Issues/Troubleshooting
 ============================
-
-MAC address of Virtual Function changes unexpectedly
-----------------------------------------------------
-If a Virtual Function's MAC address is not assigned in the host, then the VF
-(virtual function) driver will use a random MAC address. This random MAC
-address may change each time the VF driver is reloaded. You can assign a static
-MAC address in the host machine. This static MAC address will survive
-a VF driver reload.
-
 
 Hardware Issues
 ---------------
@@ -282,6 +273,28 @@ To solve this issue, create the version.h file by going to the Linux source
 tree and entering:
 
 # make include/linux/version.h
+
+
+MAC address of Virtual Function changes unexpectedly
+----------------------------------------------------
+If a Virtual Function's MAC address is not assigned in the host, then the VF
+(virtual function) driver will use a random MAC address. This random MAC
+address may change each time the VF driver is reloaded. You can assign a static
+MAC address in the host machine. This static MAC address will survive a VF
+driver reload.
+
+
+SR-IOV virtual functions have identical MAC addresses
+-----------------------------------------------------
+When you create multiple SR-IOV virtual functions, the VFs may have identical
+MAC addresses. Only one VF will pass traffic, and all traffic on other VFs with
+identical MAC addresses will fail. This is related to the
+"MACAddressPolicy=persistent" setting in
+/usr/lib/systemd/network/99-default.link.
+
+To resolve this issue, edit the /usr/lib/systemd/network/99-default.link file
+and change the MACAddressPolicy line to "MACAddressPolicy=none". For more
+information, see the systemd.link man page.
 
 
 Multiple Interfaces on Same Ethernet Broadcast Network
@@ -315,15 +328,6 @@ irq_handler_t. To resolve this issue, build the driver (step 4 above) using the
 command:
 
 # make CFLAGS_EXTRA=-DAX_RELEASE_CODE=1 install
-
-
-MSI-X Issues with Kernels Between 2.6.19 - 2.6.21 (inclusive)
--------------------------------------------------------------
-
-Kernel panics and instability may be observed on any MSI-X hardware if you use
-irqbalance with kernels between 2.6.19 and 2.6.21. If such problems are
-encountered, you may disable the irqbalance daemon or upgrade to a newer
-kernel.
 
 
 Rx Page Allocation Errors
@@ -373,7 +377,7 @@ St - Fifth Floor, Boston, MA 02110-1301 USA.
 The full GNU General Public License is included in this distribution in the
 file called "COPYING".
 
-Copyright(c) 1999 - 2019 Intel Corporation.
+Copyright(c) 1999 - 2020 Intel Corporation.
 
 
 Trademarks
