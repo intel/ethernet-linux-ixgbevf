@@ -21,6 +21,8 @@
  **/
 s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 {
+	u16 i;
+
 	/* MAC */
 	hw->mac.ops.init_hw = ixgbe_init_hw_vf;
 	hw->mac.ops.reset_hw = ixgbe_reset_hw_vf;
@@ -53,7 +55,8 @@ s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.max_tx_queues = 1;
 	hw->mac.max_rx_queues = 1;
 
-	hw->mbx.ops.init_params = ixgbe_init_mbx_params_vf;
+	for (i = 0; i < 64; i++)
+		hw->mbx.ops[i].init_params = ixgbe_init_mbx_params_vf;
 
 	return 0;
 }
@@ -154,6 +157,7 @@ s32 ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 
 	/* reset the api version */
 	hw->api_version = ixgbe_mbox_api_10;
+	ixgbe_init_mbx_params_vf(hw);
 
 	hw_dbg(hw, "Issuing a function level reset to MAC\n");
 
@@ -163,7 +167,7 @@ s32 ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 	msleep(50);
 
 	/* we cannot reset while the RSTI / RSTD bits are asserted */
-	while (!mbx->ops.check_for_rst(hw, 0) && timeout) {
+	while (!mbx->ops[0].check_for_rst(hw, 0) && timeout) {
 		timeout--;
 		udelay(5);
 	}
@@ -178,7 +182,7 @@ s32 ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 	mbx->timeout = IXGBE_VF_MBX_INIT_TIMEOUT;
 
 	msgbuf[0] = IXGBE_VF_RESET;
-	mbx->ops.write_posted(hw, msgbuf, 1, 0);
+	ixgbe_write_mbx(hw, msgbuf, 1, 0);
 
 	msleep(10);
 
@@ -187,16 +191,16 @@ s32 ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 	 * also set up the mc_filter_type which is piggy backed
 	 * on the mac address in word 3
 	 */
-	ret_val = mbx->ops.read_posted(hw, msgbuf,
-			IXGBE_VF_PERMADDR_MSG_LEN, 0);
+	ret_val = ixgbe_poll_mbx(hw, msgbuf,
+				 IXGBE_VF_PERMADDR_MSG_LEN, 0);
 	if (ret_val)
 		return ret_val;
 
-	if (msgbuf[0] != (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_ACK) &&
-	    msgbuf[0] != (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_NACK))
+	if (msgbuf[0] != (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_SUCCESS) &&
+	    msgbuf[0] != (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_FAILURE))
 		return IXGBE_ERR_INVALID_MAC_ADDR;
 
-	if (msgbuf[0] == (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_ACK))
+	if (msgbuf[0] == (IXGBE_VF_RESET | IXGBE_VT_MSGTYPE_SUCCESS))
 		memcpy(hw->mac.perm_addr, addr, IXGBE_ETH_LENGTH_OF_ADDRESS);
 
 	hw->mac.mc_filter_type = msgbuf[IXGBE_VF_MC_TYPE_WORD];
@@ -292,13 +296,12 @@ static s32 ixgbe_mta_vector(struct ixgbe_hw *hw, u8 *mc_addr)
 static s32 ixgbevf_write_msg_read_ack(struct ixgbe_hw *hw, u32 *msg,
 				      u32 *retmsg, u16 size)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
-	s32 retval = mbx->ops.write_posted(hw, msg, size, 0);
+	s32 retval = ixgbe_write_mbx(hw, msg, size, 0);
 
 	if (retval)
 		return retval;
 
-	return mbx->ops.read_posted(hw, retmsg, size, 0);
+	return ixgbe_poll_mbx(hw, retmsg, size, 0);
 }
 
 /**
@@ -326,7 +329,7 @@ s32 ixgbe_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr, u32 vmdq,
 
 	/* if nacked the address was rejected, use "perm_addr" */
 	if (!ret_val &&
-	    (msgbuf[0] == (IXGBE_VF_SET_MAC_ADDR | IXGBE_VT_MSGTYPE_NACK))) {
+	    (msgbuf[0] == (IXGBE_VF_SET_MAC_ADDR | IXGBE_VT_MSGTYPE_FAILURE))) {
 		ixgbe_get_mac_addr_vf(hw, hw->mac.addr);
 		return IXGBE_ERR_MBX;
 	}
@@ -348,7 +351,6 @@ s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 				 u32 mc_addr_count, ixgbe_mc_addr_itr next,
 				 bool clear)
 {
-	struct ixgbe_mbx_info *mbx = &hw->mbx;
 	u32 msgbuf[IXGBE_VFMAILBOX_SIZE];
 	u16 *vector_list = (u16 *)&msgbuf[1];
 	u32 vector;
@@ -378,7 +380,7 @@ s32 ixgbe_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 		vector_list[i] = (u16)vector;
 	}
 
-	return mbx->ops.write_posted(hw, msgbuf, IXGBE_VFMAILBOX_SIZE, 0);
+	return ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, IXGBE_VFMAILBOX_SIZE);
 }
 
 /**
@@ -400,6 +402,7 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 			return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
 		/* Fall through */
 	case ixgbe_mbox_api_13:
+	case ixgbe_mbox_api_15:
 		break;
 	default:
 		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
@@ -413,7 +416,7 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 		return err;
 
 	msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
-	if (msgbuf[0] == (IXGBE_VF_UPDATE_XCAST_MODE | IXGBE_VT_MSGTYPE_NACK))
+	if (msgbuf[0] == (IXGBE_VF_UPDATE_XCAST_MODE | IXGBE_VT_MSGTYPE_FAILURE))
 		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
 	return 0;
 }
@@ -441,10 +444,10 @@ s32 ixgbe_set_vfta_vf(struct ixgbe_hw *hw, u32 vlan, u32 vind,
 	msgbuf[0] |= vlan_on << IXGBE_VT_MSGINFO_SHIFT;
 
 	ret_val = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 2);
-	if (!ret_val && (msgbuf[0] & IXGBE_VT_MSGTYPE_ACK))
+	if (!ret_val && (msgbuf[0] & IXGBE_VT_MSGTYPE_SUCCESS))
 		return 0;
 
-	return ret_val | (msgbuf[0] & IXGBE_VT_MSGTYPE_NACK);
+	return ret_val | (msgbuf[0] & IXGBE_VT_MSGTYPE_FAILURE);
 }
 
 /**
@@ -509,7 +512,7 @@ s32 ixgbevf_set_uc_addr_vf(struct ixgbe_hw *hw, u32 index, u8 *addr)
 	if (!ret_val) {
 		msgbuf[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
-		if (msgbuf[0] == (msgbuf_chk | IXGBE_VT_MSGTYPE_NACK))
+		if (msgbuf[0] == (msgbuf_chk | IXGBE_VT_MSGTYPE_FAILURE))
 			return IXGBE_ERR_OUT_OF_MEM;
 	}
 
@@ -547,11 +550,10 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	struct ixgbe_mac_info *mac = &hw->mac;
 	s32 ret_val = 0;
 	u32 links_reg;
-	u32 in_msg = 0;
 	UNREFERENCED_1PARAMETER(autoneg_wait_to_complete);
 
 	/* If we were hit with a reset drop the link */
-	if (!mbx->ops.check_for_rst(hw, 0) || !mbx->timeout)
+	if (!mbx->ops[0].check_for_rst(hw, 0) || !mbx->timeout)
 		mac->get_link_status = true;
 
 	if (!mac->get_link_status)
@@ -580,7 +582,7 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	switch (links_reg & IXGBE_LINKS_SPEED_82599) {
 	case IXGBE_LINKS_SPEED_10G_82599:
 		*speed = IXGBE_LINK_SPEED_10GB_FULL;
-		if (hw->mac.type >= ixgbe_mac_X550) {
+		if (hw->mac.type >= ixgbe_mac_X550_vf) {
 			if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
 				*speed = IXGBE_LINK_SPEED_2_5GB_FULL;
 		}
@@ -590,7 +592,7 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 		break;
 	case IXGBE_LINKS_SPEED_100_82599:
 		*speed = IXGBE_LINK_SPEED_100_FULL;
-		if (hw->mac.type == ixgbe_mac_X550) {
+		if (hw->mac.type == ixgbe_mac_X550_vf) {
 			if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
 				*speed = IXGBE_LINK_SPEED_5GB_FULL;
 		}
@@ -598,30 +600,34 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	case IXGBE_LINKS_SPEED_10_X550EM_A:
 		*speed = IXGBE_LINK_SPEED_UNKNOWN;
 		/* Since Reserved in older MAC's */
-		if (hw->mac.type >= ixgbe_mac_X550)
+		if (hw->mac.type >= ixgbe_mac_X550_vf)
 			*speed = IXGBE_LINK_SPEED_10_FULL;
 		break;
 	default:
 		*speed = IXGBE_LINK_SPEED_UNKNOWN;
 	}
 
-	/* if the read failed it could just be a mailbox collision, best wait
-	 * until we are called again and don't report an error
-	 */
-	if (mbx->ops.read(hw, &in_msg, 1, 0))
-		goto out;
+	if (hw->api_version < ixgbe_mbox_api_15) {
+		u32 in_msg = 0;
 
-	if (!(in_msg & IXGBE_VT_MSGTYPE_CTS)) {
-		/* msg is not CTS and is NACK we must have lost CTS status */
-		if (in_msg & IXGBE_VT_MSGTYPE_NACK)
-			ret_val = -1;
-		goto out;
-	}
+		/* if the read failed it could just be a mailbox collision, best wait
+		 * until we are called again and don't report an error
+		 */
+		if (ixgbe_read_mbx(hw, &in_msg, 1, 0))
+			goto out;
 
-	/* the pf is talking, if we timed out in the past we reinit */
-	if (!mbx->timeout) {
-		ret_val = -1;
-		goto out;
+		if (!(in_msg & IXGBE_VT_MSGTYPE_CTS)) {
+			/* msg is not CTS and is NACK we must have lost CTS status */
+			if (in_msg & IXGBE_VT_MSGTYPE_FAILURE)
+				ret_val = IXGBE_ERR_MBX;
+			goto out;
+		}
+
+		/* the pf is talking, if we timed out in the past we reinit */
+		if (!mbx->timeout) {
+			ret_val = IXGBE_ERR_TIMEOUT;
+			goto out;
+		}
 	}
 
 	/* if we passed all the tests above then the link is up and we no
@@ -651,7 +657,7 @@ s32 ixgbevf_rlpml_set_vf(struct ixgbe_hw *hw, u16 max_size)
 	if (retval)
 		return retval;
 	if ((msgbuf[0] & IXGBE_VF_SET_LPE) &&
-	    (msgbuf[0] & IXGBE_VT_MSGTYPE_NACK))
+	    (msgbuf[0] & IXGBE_VT_MSGTYPE_FAILURE))
 		return IXGBE_ERR_MBX;
 
 	return 0;
@@ -677,7 +683,7 @@ int ixgbevf_negotiate_api_version(struct ixgbe_hw *hw, int api)
 		msg[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
 		/* Store value and return 0 on success */
-		if (msg[0] == (IXGBE_VF_API_NEGOTIATE | IXGBE_VT_MSGTYPE_ACK)) {
+		if (msg[0] == (IXGBE_VF_API_NEGOTIATE | IXGBE_VT_MSGTYPE_SUCCESS)) {
 			hw->api_version = api;
 			return 0;
 		}
@@ -699,6 +705,7 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 	case ixgbe_mbox_api_11:
 	case ixgbe_mbox_api_12:
 	case ixgbe_mbox_api_13:
+	case ixgbe_mbox_api_15:
 		break;
 	default:
 		return 0;
@@ -713,11 +720,11 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 		msg[0] &= ~IXGBE_VT_MSGTYPE_CTS;
 
 		/*
-		 * if we we didn't get an ACK there must have been
+		 * if we didn't get a SUCCESS there must have been
 		 * some sort of mailbox error so we should treat it
 		 * as such
 		 */
-		if (msg[0] != (IXGBE_VF_GET_QUEUES | IXGBE_VT_MSGTYPE_ACK))
+		if (msg[0] != (IXGBE_VF_GET_QUEUES | IXGBE_VT_MSGTYPE_SUCCESS))
 			return IXGBE_ERR_MBX;
 
 		/* record and validate values from message */

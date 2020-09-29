@@ -29,9 +29,11 @@ SR-IOV requires the correct platform and OS support.
 
 The guest OS loading this driver must support MSI-X interrupts.
 
+
 This driver is only supported as a loadable module at this time. Intel is not
 supplying patches against the kernel source to allow for static linking of the
 drivers.
+
 
 For questions related to hardware requirements, refer to the documentation
 supplied with your Intel adapter. All hardware requirements listed apply to use

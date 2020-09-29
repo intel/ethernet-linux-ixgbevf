@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.8.1) RELEASE_TAG
+#define DRV_VERSION __stringify(4.9.3) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -2746,7 +2746,8 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_13,
+	int api[] = { ixgbe_mbox_api_15,
+		      ixgbe_mbox_api_13,
 		      ixgbe_mbox_api_12,
 		      ixgbe_mbox_api_11,
 		      ixgbe_mbox_api_10,
@@ -2761,6 +2762,9 @@ static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 			break;
 		idx++;
 	}
+
+	if (hw->api_version >= ixgbe_mbox_api_15)
+		ixgbe_upgrade_mbx_params_vf(hw);
 
 	spin_unlock_bh(&adapter->mbx_lock);
 }
@@ -3131,6 +3135,7 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 		case ixgbe_mbox_api_11:
 		case ixgbe_mbox_api_12:
 		case ixgbe_mbox_api_13:
+		case ixgbe_mbox_api_15:
 			if (adapter->xdp_prog &&
 			    hw->mac.max_tx_queues == rss)
 				rss = rss > 3 ? 2 : 1;
@@ -3571,7 +3576,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 #else
 	ixgbe_init_ops_vf(hw);
 #endif
-	hw->mbx.ops.init_params(hw);
+	ixgbe_init_mbx_params_vf(hw);
 
 	if (hw->mac.type >= ixgbe_mac_X550_vf) {
 		err = ixgbevf_init_rss_key(adapter);
@@ -5204,11 +5209,14 @@ static int ixgbevf_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 static int ixgbevf_xdp(struct net_device *dev, struct netdev_xdp *xdp)
 #endif /* HAVE_NDO_BPF */
 {
+#ifdef HAVE_XDP_QUERY_PROG
 	struct ixgbevf_adapter *adapter = netdev_priv(dev);
+#endif
 
 	switch (xdp->command) {
 	case XDP_SETUP_PROG:
 		return ixgbevf_xdp_setup(dev, xdp->prog);
+#ifdef HAVE_XDP_QUERY_PROG
 	case XDP_QUERY_PROG:
 #ifndef NO_NETDEV_BPF_PROG_ATTACHED
 		xdp->prog_attached = !!(adapter->xdp_prog);
@@ -5216,6 +5224,7 @@ static int ixgbevf_xdp(struct net_device *dev, struct netdev_xdp *xdp)
 		xdp->prog_id = adapter->xdp_prog ?
 			       adapter->xdp_prog->aux->id : 0;
 		return 0;
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -5529,6 +5538,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	case ixgbe_mbox_api_11:
 	case ixgbe_mbox_api_12:
 	case ixgbe_mbox_api_13:
+	case ixgbe_mbox_api_15:
 		max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
 			  (ETH_HLEN + ETH_FCS_LEN);
 		break;
