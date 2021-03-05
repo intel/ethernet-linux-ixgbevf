@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2020 Intel Corporation. */
+/* Copyright(c) 1999 - 2021 Intel Corporation. */
 
 
 /******************************************************************************
@@ -40,12 +40,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.10.2) RELEASE_TAG
+#define DRV_VERSION __stringify(4.11.1) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2020 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2021 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -4104,7 +4104,7 @@ int ixgbevf_setup_rx_resources(struct ixgbevf_adapter *adapter,
 #ifdef HAVE_XDP_BUFF_RXQ
 	/* XDP RX-queue info */
 	if (xdp_rxq_info_reg(&rx_ring->xdp_rxq, adapter->netdev,
-			     rx_ring->queue_index) < 0)
+			     rx_ring->queue_index, 0) < 0)
 		goto err;
 
 #endif /* HAVE_XDP_BUFF_RXQ */

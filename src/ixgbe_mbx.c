@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2020 Intel Corporation. */
+/* Copyright(c) 1999 - 2021 Intel Corporation. */
 
 #include "ixgbe_type.h"
 #include "ixgbe_mbx.h"
@@ -528,9 +528,7 @@ void ixgbe_init_mbx_params_vf(struct ixgbe_hw *hw)
 {
 	struct ixgbe_mbx_info *mbx = &hw->mbx;
 
-	/* start mailbox as timed out and let the reset_hw call set the timeout
-	 * value to begin communications */
-	mbx->timeout = 0;
+	mbx->timeout = IXGBE_VF_MBX_INIT_TIMEOUT;
 	mbx->udelay = IXGBE_VF_MBX_INIT_DELAY;
 
 	mbx->size = IXGBE_VFMAILBOX_SIZE;

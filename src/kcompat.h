@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2020 Intel Corporation. */
+/* Copyright(c) 1999 - 2021 Intel Corporation. */
 
 #ifndef _KCOMPAT_H_
 #define _KCOMPAT_H_
@@ -5064,6 +5064,20 @@ static inline void __kc_skb_set_hash(struct sk_buff __maybe_unused *skb,
 
 #else	/* RHEL_RELEASE_CODE >= 7.0 || SLE_VERSION_CODE >= 12.0 */
 
+#if ((RHEL_RELEASE_CODE && RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(7,0)) ||\
+     (SLE_VERSION_CODE && SLE_VERSION_CODE <= SLE_VERSION(12,1,0)))
+/* GPLv2 code taken from 5.10-rc2 kernel source include/linux/pci.h, Copyright
+ * original authors.
+ */
+static inline int pci_enable_msix_exact(struct pci_dev *dev,
+					struct msix_entry *entries, int nvec)
+{
+	int rc = pci_enable_msix_range(dev, entries, nvec, nvec);
+	if (rc < 0)
+		return rc;
+	return 0;
+}
+#endif /* <=EL7.0 || <=SLES 12.1 */
 #if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,5)))
 #ifndef HAVE_VXLAN_RX_OFFLOAD
 #define HAVE_VXLAN_RX_OFFLOAD
@@ -5592,6 +5606,8 @@ of_find_net_device_by_node(struct device_node __always_unused *np)
 #endif
 #if RHEL_RELEASE_CODE && (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2))
 #define HAVE_NDO_BRIDGE_GETLINK_NLFLAGS
+#define HAVE_RHEL7_EXTENDED_NDO_SET_TX_MAXRATE
+#define HAVE_NDO_SET_TX_MAXRATE
 #endif
 #if !((RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,8) && RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)) && \
       (RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7,2)) && \
@@ -7142,6 +7158,9 @@ devlink_flash_update_status_notify(struct devlink __always_unused *devlink,
 #define HAVE_XSK_UMEM_HAS_ADDRS
 #define HAVE_FLOW_BLOCK_API
 #define HAVE_DEVLINK_PORT_ATTR_PCI_VF
+#if IS_ENABLED(CONFIG_DIMLIB)
+#define HAVE_CONFIG_DIMLIB
+#endif
 #endif /* 5.3.0 */
 
 /*****************************************************************************/
@@ -7255,6 +7274,8 @@ _kc_devlink_region_create(struct devlink *devlink,
 /*****************************************************************************/
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,8,0))
 #define xdp_convert_buff_to_frame convert_to_xdp_frame
+#define flex_array_size(p, member, count) \
+	array_size(count, sizeof(*(p)->member) + __must_be_array((p)->member))
 #else /* >= 5.8.0 */
 #undef HAVE_AF_XDP_ZC_SUPPORT
 #define HAVE_TC_FLOW_INDIR_DEV
@@ -7325,4 +7346,24 @@ static inline void net_prefetch(void *p)
 #define HAVE_DEVLINK_REGION_OPS_SNAPSHOT_OPS
 #define HAVE_DEVLINK_FLASH_UPDATE_PARAMS
 #endif /* 5.10.0 */
+
+/*****************************************************************************/
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0))
+#ifdef HAVE_XDP_BUFF_RXQ
+#include <net/xdp.h>
+static inline int
+_kc_xdp_rxq_info_reg(struct xdp_rxq_info *xdp_rxq, struct net_device *dev,
+		     u32 queue_index, unsigned int __always_unused napi_id)
+{
+	return xdp_rxq_info_reg(xdp_rxq, dev, queue_index);
+}
+
+#define xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id) \
+	_kc_xdp_rxq_info_reg(xdp_rxq, dev, queue_index, napi_id)
+#endif /* HAVE_XDP_BUFF_RXQ */
+#define HAVE_DEVLINK_FLASH_UPDATE_BEGIN_END_NOTIFY
+#else /* >= 5.11.0 */
+#define HAVE_DEVLINK_FLASH_UPDATE_PARAMS_FW
+#endif /* 5.11.0 */
+
 #endif /* _KCOMPAT_H_ */
