@@ -4,7 +4,7 @@
 #include "ixgbe_hv_vf.h"
 
 /**
- * Hyper-V variant - just a stub.
+ * ixgbevf_hv_update_mc_addr_list_vf - Hyper-V variant - just a stub.
  * @hw: unused
  * @mc_addr_list: unused
  * @mc_addr_count: unused
@@ -21,7 +21,7 @@ s32 ixgbevf_hv_update_mc_addr_list_vf(struct ixgbe_hw *hw, u8 *mc_addr_list,
 }
 
 /**
- * Hyper-V variant - just a stub.
+ * ixgbevf_hv_update_xcast_mode - Hyper-V variant - just a stub.
  * @hw: unused
  * @xcast_mode: unused
  */
@@ -33,7 +33,7 @@ s32 ixgbevf_hv_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 }
 
 /**
- * Hyper-V variant - just a stub.
+ * ixgbevf_hv_set_vfta_vf - Hyper-V variant - just a stub.
  * @hw: unused
  * @vlan: unused
  * @vind: unused
@@ -56,12 +56,12 @@ s32 ixgbevf_hv_set_uc_addr_vf(struct ixgbe_hw *hw, u32 index, u8 *addr)
 }
 
 /**
- * Hyper-V variant; there is no mailbox communication.
+ * ixgbevf_hv_check_mac_link_vf - Hyper-V variant; there is no mailbox
+ * communication.
  * @hw: pointer to hardware structure
  * @speed: pointer to link speed
  * @link_up: true is link is up, false otherwise
  * @autoneg_wait_to_complete: unused
- *
  */
 s32 ixgbevf_hv_check_mac_link_vf(struct ixgbe_hw *hw,
 					ixgbe_link_speed *speed,

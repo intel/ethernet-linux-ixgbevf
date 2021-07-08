@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.11.1) RELEASE_TAG
+#define DRV_VERSION __stringify(4.12.4) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -251,9 +251,11 @@ s32 ixgbevf_hv_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr,
 }
 
 /**
- * Hyper-V variant; the VF/PF communication is through the PCI
- * config space.
+ * ixgbevf_hv_reset_hw_vf - Hyper-V hardware reset variant
  * @hw: pointer to hardware structure
+ *
+ * The VF/PF communication is through the PCI
+ * config space.
  */
 s32 ixgbevf_hv_reset_hw_vf(struct ixgbe_hw *hw)
 {
@@ -4943,8 +4945,8 @@ static int ixgbevf_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 /**
- * Polling 'interrupt' - used by things like netconsole to send skbs
- * without having to re-enable interrupts. It's not called while
+ * ixgbevf_netpoll - Polling 'interrupt' used by things like netconsole to send
+ * skbs without having to re-enable interrupts. It's not called while
  * the interrupt routine is executing.
  * @netdev: network interface device structure
  **/
@@ -5561,22 +5563,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 
 	/* MTU range: 68 - 1504 or 9710 */
 	min_mtu = ETH_MIN_MTU;
-	switch (adapter->hw.api_version) {
-	case ixgbe_mbox_api_11:
-	case ixgbe_mbox_api_12:
-	case ixgbe_mbox_api_13:
-	case ixgbe_mbox_api_15:
-		max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
-			  (ETH_HLEN + ETH_FCS_LEN);
-		break;
-	default:
-		if (adapter->hw.mac.type != ixgbe_mac_82599_vf)
-			max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE -
-				  (ETH_HLEN + ETH_FCS_LEN);
-		else
-			max_mtu = ETH_DATA_LEN + ETH_FCS_LEN;
-		break;
-	}
+	max_mtu = IXGBE_MAX_JUMBO_FRAME_SIZE - (ETH_HLEN + ETH_FCS_LEN);
 
 #ifdef HAVE_RHEL7_EXTENDED_MIN_MAX_MTU
 	netdev->extended->min_mtu = min_mtu;
