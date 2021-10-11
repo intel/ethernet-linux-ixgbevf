@@ -3,7 +3,7 @@ ixgbevf Linux* Virtual Function (VF) Driver for Intel(R) Ethernet Network
 Connection
 ================================================================================
 
-October 20, 2020
+July 29, 2021
 
 ================================================================================
 
@@ -59,37 +59,6 @@ http://www.intel.com/support
 Building and Installation
 =========================
 
-To build a binary RPM package of this driver
---------------------------------------------
-Note: RPM functionality has only been tested in Red Hat distributions.
-
-1. Run the following command, where <x.x.x> is the version number for the
-   driver tar file.
-
-   # rpmbuild -tb ixgbevf-<x.x.x>.tar.gz
-
-   NOTE: For the build to work properly, the currently running kernel MUST
-   match the version and configuration of the installed kernel sources. If
-   you have just recompiled the kernel, reboot the system before building.
-
-2. After building the RPM, the last few lines of the tool output contain the
-   location of the RPM file that was built. Install the RPM with one of the
-   following commands, where <RPM> is the location of the RPM file:
-
-   # rpm -Uvh <RPM>
-       or
-   # dnf/yum localinstall <RPM>
-
-NOTES:
-- To compile the driver on some kernel/arch combinations, you may need to
-install a package with the development version of libelf (e.g. libelf-dev,
-libelf-devel, elfutilsl-libelf-devel).
-- When compiling an out-of-tree driver, details will vary by distribution.
-However, you will usually need a kernel-devel RPM or some RPM that provides the
-kernel headers at a minimum. The RPM kernel-devel will usually fill in the link
-at /lib/modules/'uname -r'/build.
-
-
 To manually build the driver
 ----------------------------
 1. Move the virtual function driver tar file to the directory of your choice.
@@ -140,17 +109,46 @@ VER>/updates/drivers/net/ethernet/intel/ixgbevf/ixgbevf.ko
    # ping <IP_address>
 
 Note: For certain distributions like (but not limited to) Red Hat Enterprise
-Linux 7, Ubuntu, and SUSE Linux Enterprise Server (SLES) 11, once the driver is
-installed, you may need to update the initrd/initramfs file to prevent the OS
-loading old versions of the ixgbevf driver.
+Linux 7 and Ubuntu, once the driver is installed, you may need to update the
+initrd/initramfs file to prevent the OS loading old versions of the ixgbevf
+driver.
    For Red Hat distributions:
 	# dracut --force
 
    For Ubuntu:
 	# update-initramfs -u
 
-   For SLES:
-	# mkinitrd
+ 
+To build a binary RPM package of this driver
+--------------------------------------------
+Note: RPM functionality has only been tested in Red Hat distributions.
+
+1. Run the following command, where <x.x.x> is the version number for the
+   driver tar file.
+
+   # rpmbuild -tb ixgbevf-<x.x.x>.tar.gz
+
+   NOTE: For the build to work properly, the currently running kernel MUST
+   match the version and configuration of the installed kernel sources. If
+   you have just recompiled the kernel, reboot the system before building.
+
+2. After building the RPM, the last few lines of the tool output contain the
+   location of the RPM file that was built. Install the RPM with one of the
+   following commands, where <RPM> is the location of the RPM file:
+
+   # rpm -Uvh <RPM>
+       or
+   # dnf/yum localinstall <RPM>
+
+NOTES:
+- To compile the driver on some kernel/arch combinations, you may need to
+install a package with the development version of libelf (e.g. libelf-dev,
+libelf-devel, elfutilsl-libelf-devel).
+- When compiling an out-of-tree driver, details will vary by distribution.
+However, you will usually need a kernel-devel RPM or some RPM that provides the
+kernel headers at a minimum. The RPM kernel-devel will usually fill in the link
+at /lib/modules/'uname -r'/build.
+
 
 
 
@@ -383,7 +381,7 @@ St - Fifth Floor, Boston, MA 02110-1301 USA.
 The full GNU General Public License is included in this distribution in the
 file called "COPYING".
 
-Copyright(c) 1999 - 2020 Intel Corporation.
+Copyright(c) 1999 - 2021 Intel Corporation.
 
 
 Trademarks

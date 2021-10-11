@@ -173,10 +173,8 @@ struct ixgbevf_ring {
 
 #define IXGBEVF_DEFAULT_TXD   1024
 #define IXGBEVF_DEFAULT_RXD   512
-#define IXGBEVF_MAX_TXD       4096
-#define IXGBEVF_MIN_TXD       64
-#define IXGBEVF_MAX_RXD       4096
-#define IXGBEVF_MIN_RXD       64
+#define IXGBEVF_MAX_NUM_DESCRIPTORS	4096
+#define IXGBEVF_MIN_NUM_DESCRIPTORS	64
 
 /* Supported Rx Buffer Sizes */
 #define IXGBEVF_RXBUFFER_256   256    /* Used for packet split */
@@ -526,6 +524,7 @@ struct ixgbevf_adapter {
 	u8 rss_indir_tbl[IXGBEVF_X550_VFRETA_SIZE];
 	u32 flags;
 	bool irqs_ready;
+	bool link_state;
 #define IXGBE_FLAG_RX_CSUM_ENABLED		BIT(1)
 #define IXGBEVF_FLAGS_LEGACY_RX			BIT(2)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP		BIT(4)

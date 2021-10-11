@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.12.4) RELEASE_TAG
+#define DRV_VERSION __stringify(4.13.3) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -2802,6 +2802,7 @@ static void ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 {
 	struct net_device *netdev = adapter->netdev;
 	struct ixgbe_hw *hw = &adapter->hw;
+	bool state;
 
 #ifdef CONFIG_NETDEVICES_MULTIQUEUE
 	if (adapter->num_tx_queues > 1)
@@ -2820,6 +2821,11 @@ static void ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 				0, IXGBE_RAH_AV);
 
 	spin_unlock_bh(&adapter->mbx_lock);
+
+	state = adapter->link_state;
+	hw->mac.ops.get_link_state(hw, &adapter->link_state);
+	if (state && state != adapter->link_state)
+		e_info(drv, "VF is administratively disabled\n");
 
 	smp_mb__before_atomic();
 	clear_bit(__IXGBEVF_DOWN, &adapter->state);
@@ -3660,6 +3666,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 	adapter->flags |= IXGBE_FLAG_RX_CSUM_ENABLED;
 
 	adapter->irqs_ready = false;
+	adapter->link_state = true;
 
 	set_bit(__IXGBEVF_DOWN, &adapter->state);
 
@@ -3920,7 +3927,7 @@ static void ixgbevf_watchdog_subtask(struct ixgbevf_adapter *adapter)
 
 	ixgbevf_watchdog_update_link(adapter);
 
-	if (adapter->link_up)
+	if (adapter->link_up && adapter->link_state)
 		ixgbevf_watchdog_link_is_up(adapter);
 	else
 		ixgbevf_watchdog_link_is_down(adapter);

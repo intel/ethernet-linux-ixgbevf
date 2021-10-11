@@ -390,8 +390,8 @@ static void ixgbevf_get_ringparam(struct net_device *netdev,
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
-	ring->rx_max_pending = IXGBEVF_MAX_RXD;
-	ring->tx_max_pending = IXGBEVF_MAX_TXD;
+	ring->rx_max_pending = IXGBEVF_MAX_NUM_DESCRIPTORS;
+	ring->tx_max_pending = IXGBEVF_MAX_NUM_DESCRIPTORS;
 	ring->rx_pending = adapter->rx_ring_count;
 	ring->tx_pending = adapter->tx_ring_count;
 }
@@ -407,13 +407,22 @@ static int ixgbevf_set_ringparam(struct net_device *netdev,
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
 		return -EINVAL;
 
-	new_rx_count = max(ring->rx_pending, (u32)IXGBEVF_MIN_RXD);
-	new_rx_count = min(new_rx_count, (u32)IXGBEVF_MAX_RXD);
-	new_rx_count = ALIGN(new_rx_count, IXGBE_REQ_RX_DESCRIPTOR_MULTIPLE);
+	if (ring->tx_pending > IXGBEVF_MAX_NUM_DESCRIPTORS ||
+	    ring->tx_pending < IXGBEVF_MIN_NUM_DESCRIPTORS ||
+	    ring->rx_pending > IXGBEVF_MAX_NUM_DESCRIPTORS ||
+	    ring->rx_pending < IXGBEVF_MIN_NUM_DESCRIPTORS) {
+		netdev_info(netdev,
+			    "Descriptors requested (Tx: %d / Rx: %d) out of range [%d-%d]\n",
+			    ring->tx_pending, ring->rx_pending,
+			    IXGBEVF_MIN_NUM_DESCRIPTORS,
+			    IXGBEVF_MAX_NUM_DESCRIPTORS);
+		return -EINVAL;
+	}
 
-	new_tx_count = max(ring->tx_pending, (u32)IXGBEVF_MIN_TXD);
-	new_tx_count = min(new_tx_count, (u32)IXGBEVF_MAX_TXD);
-	new_tx_count = ALIGN(new_tx_count, IXGBE_REQ_TX_DESCRIPTOR_MULTIPLE);
+	new_tx_count = ALIGN(ring->tx_pending,
+			     IXGBE_REQ_TX_DESCRIPTOR_MULTIPLE);
+	new_rx_count = ALIGN(ring->rx_pending,
+			     IXGBE_REQ_RX_DESCRIPTOR_MULTIPLE);
 
 	/* if nothing to do return success */
 	if ((new_tx_count == adapter->tx_ring_count) &&
