@@ -1,6 +1,6 @@
 Name: ixgbevf
 Summary: Intel(R) 10GbE PCI Express Virtual Function Driver
-Version: 4.13.3
+Version: 4.14.5
 Release: 1
 Source: %{name}-%{version}.tar.gz
 Vendor: Intel Corporation
@@ -50,7 +50,7 @@ find lib -name "ixgbevf.ko" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/file.list
 find lib -name "auxiliary.ko" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/aux.list
-find lib -path "*auxiliary/Module.symvers" -printf "/%p\n" \
+find lib -path "*extern-symvers/auxiliary.symvers" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/aux.list
 find * -name "auxiliary_bus.h" -printf "/%p\n" \
 	>>%{_builddir}/%{name}-%{version}/aux.list
@@ -408,7 +408,8 @@ Version: 1.0.0
 %description -n auxiliary
 The Auxiliary bus driver (auxiliary.ko), backported from upstream, for use by kernels that don't have auxiliary bus.
 
-# %if to hide this whole section, causes RPM to not build the subproject at all
+# The if is used to hide this whole section. This causes RPM to skip the build
+# of the auxiliary subproject entirely.
 %if (%need_aux == 2)
 %files -n auxiliary -f aux.list
 %doc aux.list

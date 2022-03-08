@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.13.3) RELEASE_TAG
+#define DRV_VERSION __stringify(4.14.5) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -692,6 +692,8 @@ static void ixgbevf_process_skb_fields(struct ixgbevf_ring *rx_ring,
 				       union ixgbe_adv_rx_desc *rx_desc,
 				       struct sk_buff *skb)
 {
+	u32 flags = rx_ring->q_vector->adapter->flags;
+
 #ifdef NETIF_F_RXHASH
 	ixgbevf_rx_hash(rx_ring, rx_desc, skb);
 #endif /* NETIF_F_RXHASH */
@@ -707,6 +709,9 @@ static void ixgbevf_process_skb_fields(struct ixgbevf_ring *rx_ring,
 			__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vid);
 	}
 #endif
+	if ((flags & IXGBE_FLAG_RX_HWTSTAMP_ENABLED) &&
+	    ixgbevf_test_staterr(rx_desc, IXGBE_RXD_STAT_TSIP))
+		__pskb_trim(skb, skb->len - IXGBE_TS_HDR_LEN);
 
 	skb->protocol = eth_type_trans(skb, rx_ring->netdev);
 }
@@ -1320,10 +1325,11 @@ ixgbevf_run_xdp(struct ixgbevf_adapter __maybe_unused *adapter,
 		break;
 	default:
 		bpf_warn_invalid_xdp_action(act);
-		/* fallthrough */
+		fallthrough;
 	case XDP_ABORTED:
 		trace_xdp_exception(rx_ring->netdev, xdp_prog, act);
 		/* fallthrough -- handle aborts by dropping packet */
+		fallthrough;
 	case XDP_DROP:
 		result = IXGBEVF_XDP_CONSUMED;
 		break;
@@ -3665,6 +3671,9 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 	/* enable rx csum by default */
 	adapter->flags |= IXGBE_FLAG_RX_CSUM_ENABLED;
 
+	if (hw->mac.type >= ixgbe_mac_X550_vf)
+		adapter->flags |= IXGBE_FLAG_RX_HWTSTAMP_ENABLED;
+
 	adapter->irqs_ready = false;
 	adapter->link_state = true;
 
@@ -4499,7 +4508,7 @@ static void ixgbevf_tx_csum(struct ixgbevf_ring *tx_ring,
 			type_tucmd = IXGBE_ADVTXD_TUCMD_L4T_SCTP;
 			break;
 		}
-		/* fall through */
+		fallthrough;
 	default:
 		skb_checksum_help(skb);
 		goto no_csum;

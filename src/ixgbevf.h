@@ -193,6 +193,7 @@ struct ixgbevf_ring {
 #define IXGBEVF_MAX_FRAME_BUILD_SKB	IXGBEVF_RXBUFFER_2048
 #endif
 
+#define IXGBE_TS_HDR_LEN		8
 #define IXGBE_TX_FLAGS_CSUM		BIT(0)
 #define IXGBE_TX_FLAGS_VLAN		BIT(1)
 #define IXGBE_TX_FLAGS_TSO		BIT(2)
@@ -529,6 +530,7 @@ struct ixgbevf_adapter {
 #define IXGBEVF_FLAGS_LEGACY_RX			BIT(2)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV4_UDP		BIT(4)
 #define IXGBEVF_FLAG_RSS_FIELD_IPV6_UDP		BIT(5)
+#define IXGBE_FLAG_RX_HWTSTAMP_ENABLED		BIT(6)
 };
 
 struct ixgbevf_info {

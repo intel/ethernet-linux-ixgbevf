@@ -25,10 +25,12 @@ This virtual function driver supports kernel versions 2.6.x and newer.
 
 The associated Physical Function (PF) driver for this driver is ixgbe.
 
+The MTU size set on a VF should match the MTU size set on the PF. A mismatch in
+MTU sizes may cause unexpected results.
+
 SR-IOV requires the correct platform and OS support.
 
 The guest OS loading this driver must support MSI-X interrupts.
-
 
 This driver is only supported as a loadable module at this time. Intel is not
 supplying patches against the kernel source to allow for static linking of the
@@ -150,8 +152,6 @@ kernel headers at a minimum. The RPM kernel-devel will usually fill in the link
 at /lib/modules/'uname -r'/build.
 
 
-
-
 InterruptThrottleRate
 ---------------------
 Valid Range:
@@ -243,9 +243,8 @@ MAC address of the underlying PF (Physical Function) device.
 
 NAPI
 ----
-This driver supports NAPI (Rx polling mode).
-For more information on NAPI, see
-https://www.linuxfoundation.org/collaborate/workgroups/networking/napi
+This driver supports NAPI (Rx polling mode). For more information on NAPI, see
+https://www.linuxfoundation.org/collaborate/workgroups/networking/napi.
 
 
 Known Issues/Troubleshooting
@@ -288,6 +287,11 @@ MAC address in the host machine. This static MAC address will survive a VF
 driver reload.
 
 
+dmesg: Unable to start - perhaps the PF Driver isn't up yet
+-----------------------------------------------------------
+This message is posted when the PF interface is down when you try to change the
+number of Tx or Rx queues on the VF interface. To resolve the issue, bring the
+PF interface up and reload the VF driver.
 SR-IOV virtual functions have identical MAC addresses
 -----------------------------------------------------
 When you create multiple SR-IOV virtual functions, the VFs may have identical
