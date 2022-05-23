@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright(c) 1999 - 2021 Intel Corporation. */
+/* Copyright(c) 1999 - 2022 Intel Corporation. */
 
 
 /******************************************************************************
@@ -40,12 +40,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.14.5) RELEASE_TAG
+#define DRV_VERSION __stringify(4.15.1) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2021 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2022 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -1324,7 +1324,7 @@ ixgbevf_run_xdp(struct ixgbevf_adapter __maybe_unused *adapter,
 		result = ixgbevf_xmit_xdp_ring(xdp_ring, xdp);
 		break;
 	default:
-		bpf_warn_invalid_xdp_action(act);
+		bpf_warn_invalid_xdp_action(rx_ring->netdev, xdp_prog, act);
 		fallthrough;
 	case XDP_ABORTED:
 		trace_xdp_exception(rx_ring->netdev, xdp_prog, act);
@@ -4237,7 +4237,7 @@ int ixgbevf_open(struct net_device *netdev)
 		 * the vf can't start. */
 		if (hw->adapter_stopped) {
 			err = IXGBE_ERR_MBX;
-			DPRINTK(DRV, ERR, "Unable to start - perhaps the PF"
+			DPRINTK(DRV, ERR, "Unable to start - perhaps the PF "
 				"Driver isn't up yet\n");
 			goto err_setup_reset;
 		}

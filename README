@@ -292,6 +292,8 @@ dmesg: Unable to start - perhaps the PF Driver isn't up yet
 This message is posted when the PF interface is down when you try to change the
 number of Tx or Rx queues on the VF interface. To resolve the issue, bring the
 PF interface up and reload the VF driver.
+
+
 SR-IOV virtual functions have identical MAC addresses
 -----------------------------------------------------
 When you create multiple SR-IOV virtual functions, the VFs may have identical
