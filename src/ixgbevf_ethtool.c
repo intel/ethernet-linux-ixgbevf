@@ -385,8 +385,16 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 #endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static void
+ixgbevf_get_ringparam(struct net_device *netdev,
+		      struct ethtool_ringparam *ring,
+		      struct kernel_ethtool_ringparam __always_unused *ker,
+		      struct netlink_ext_ack __always_unused *extack)
+#else
 static void ixgbevf_get_ringparam(struct net_device *netdev,
 				  struct ethtool_ringparam *ring)
+#endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
@@ -396,8 +404,16 @@ static void ixgbevf_get_ringparam(struct net_device *netdev,
 	ring->tx_pending = adapter->tx_ring_count;
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static int
+ixgbevf_set_ringparam(struct net_device *netdev,
+		      struct ethtool_ringparam *ring,
+		      struct kernel_ethtool_ringparam __always_unused *ker,
+		      struct netlink_ext_ack __always_unused *extack)
+#else
 static int ixgbevf_set_ringparam(struct net_device *netdev,
 				 struct ethtool_ringparam *ring)
+#endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbevf_ring *tx_ring = NULL, *rx_ring = NULL;
