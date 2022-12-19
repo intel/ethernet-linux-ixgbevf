@@ -40,7 +40,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.16.5) RELEASE_TAG
+#define DRV_VERSION __stringify(4.17.5) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -3269,7 +3269,7 @@ static int ixgbevf_alloc_q_vector(struct ixgbevf_adapter *adapter, int v_idx,
 		return -ENOMEM;
 
 	/* initialize NAPI */
-	netif_napi_add(adapter->netdev, &q_vector->napi, ixgbevf_poll, 64);
+	netif_napi_add(adapter->netdev, &q_vector->napi, ixgbevf_poll);
 
 	/* tie q_vector and adapter together */
 	adapter->q_vector[v_idx] = q_vector;
@@ -5303,7 +5303,11 @@ static const struct net_device_ops ixgbevf_netdev_ops = {
 	.ndo_change_mtu		= ixgbevf_change_mtu,
 #endif
 #ifdef ETHTOOL_OPS_COMPAT
+#ifdef HAVE_NDO_ETH_IOCTL
+	.ndo_eth_ioctl		= ixgbevf_ioctl,
+#else
 	.ndo_do_ioctl		= ixgbevf_ioctl,
+#endif /* HAVE_NDO_ETH_IOCTL */
 #endif
 	.ndo_tx_timeout		= ixgbevf_tx_timeout,
 #ifdef HAVE_VLAN_RX_REGISTER

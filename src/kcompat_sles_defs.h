@@ -71,6 +71,12 @@
  */
 
 /*****************************************************************************/
+#if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(4,4,0,73))
+#else /* >= 4.4.0-73 */
+#define HAVE_DEVLINK_PORT_SPLIT
+#endif /* 4.4.0-73 */
+
+/*****************************************************************************/
 #if (SLE_KERNEL_CODE > SLE_KERNEL_VERSION(4,12,14,23) && \
      SLE_KERNEL_CODE < SLE_KERNEL_VERSION(4,12,14,94))
 /*
@@ -115,12 +121,13 @@
 #undef NEED_MACVLAN_RELEASE_L2FW_OFFLOAD
 #undef NEED_MACVLAN_SUPPORTS_DEST_FILTER
 #undef NEED_IDA_ALLOC_MIN_MAX_RANGE_FREE
+#define HAVE_DEVLINK_PORT_SPLIT_EXTACK
 #endif /* 4.12.14-111 */
 
 /*****************************************************************************/
 /* SLES 12-SP5 base kernel version */
-#if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(4,12,14,120))
-#else /* >= 4.12.14-120 */
+#if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(4,12,14,115))
+#else /* >= 4.12.14-115 */
 #define HAVE_NDO_SELECT_QUEUE_SB_DEV
 #define HAVE_TCF_MIRRED_DEV
 #define HAVE_TCF_BLOCK
@@ -129,7 +136,8 @@
 #undef NEED_TC_SETUP_QDISC_MQPRIO
 #undef NEED_TC_CLS_CAN_OFFLOAD_AND_CHAIN0
 #undef NEED_NETDEV_TX_SENT_QUEUE
-#endif /* 4.12.14-120 */
+#define HAVE_LINKMODE
+#endif /* 4.12.14-115 */
 
 /*****************************************************************************/
 /* SLES 15-SP1 base */
@@ -147,6 +155,7 @@
 #undef NEED_SKB_FRAG_OFF
 #undef NEED_SKB_FRAG_OFF_ADD
 #define HAVE_FLOW_INDR_BLOCK_LOCK
+#define HAVE_DEVLINK_PARAMS_PUBLISH
 #endif /* 5.3.8-2 */
 
 #if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,3,16,2))
@@ -154,11 +163,17 @@
 #define HAVE_DEVLINK_HEALTH_OPS_EXTACK
 #endif /* 5.3.16-2 */
 
+#if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,3,18,24))
+#else /* >= 5.3.18-24 */
+#undef NEED_MUL_U64_U64_DIV_U64
+#endif
+
 #if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,3,18,26))
 #else /* >= 5.3.18-26 */
 #undef NEED_CPU_LATENCY_QOS_RENAME
 #define HAVE_DEVLINK_REGION_OPS_SNAPSHOT_OPS
 #define HAVE_DEVLINK_FLASH_UPDATE_PARAMS
+#define HAVE_DEVLINK_RELOAD_ENABLE_DISABLE
 #endif
 
 /*****************************************************************************/
@@ -182,6 +197,18 @@
 #endif /* 5.3.18-38 */
 
 /*****************************************************************************/
+#if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,3,18,41))
+#define NEED_XSK_BUFF_POOL_RENAME
+#else /* >= 5.3.18-41 */
+#define HAVE_XDP_BUFF_FRAME_SZ
+#define HAVE_NETDEV_BPF_XSK_POOL
+#undef NEED_XSK_UMEM_GET_RX_FRAME_SIZE
+#undef NEED_XSK_BUFF_POOL_RENAME
+#undef NEED_XSK_BUFF_DMA_SYNC_FOR_CPU
+#define HAVE_MEM_TYPE_XSK_BUFF_POOL
+#endif /* 5.3.18-41 */
+
+/*****************************************************************************/
 #if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,3,18,59))
 #else /* >= 5.3.18-59 */
 #undef NEED_ETH_HW_ADDR_SET
@@ -192,14 +219,16 @@
 #else /* >= 5.14.17-150400.1 */
 	#undef HAVE_DEVLINK_PARAMS_PUBLISH
 	#undef HAVE_DEVLINK_REGISTER_SETS_DEV
-	#undef HAVE_DEVLINK_RELOAD_ACTION_AND_LIMIT
+	#define HAVE_DEVLINK_SET_FEATURES
 #endif /* 5.14.17-150400.1 */
 
 /*****************************************************************************/
 #if (SLE_KERNEL_CODE < SLE_KERNEL_VERSION(5,14,21,9))
 #else /* >= 5.14.21-150400.9 */
 #undef NEED_DEVLINK_ALLOC_SETS_DEV
+#undef HAVE_DEVLINK_RELOAD_ENABLE_DISABLE
 #define HAVE_ETHTOOL_COALESCE_EXTACK
+#define HAVE_DEVLINK_OPS_CREATE_DEL
 #endif /* 5.14.21-150400.9 */
 
 #endif /* _KCOMPAT_SLES_DEFS_H_ */
