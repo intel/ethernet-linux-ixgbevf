@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2022 Intel Corporation. */
+/* Copyright(c) 1999 - 2023 Intel Corporation. */
 
 #ifndef _IXGBE_VF_H_
 #define _IXGBE_VF_H_
