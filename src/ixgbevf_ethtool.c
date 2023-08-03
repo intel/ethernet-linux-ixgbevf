@@ -652,12 +652,12 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 
 #ifdef HAVE_NDO_GET_STATS64
 		do {
-			start = u64_stats_fetch_begin_irq(&ring->syncp);
+			start = u64_stats_fetch_begin(&ring->syncp);
 #endif
 			data[i]   = ring->stats.packets;
 			data[i+1] = ring->stats.bytes;
 #ifdef HAVE_NDO_GET_STATS64
-		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
+		} while (u64_stats_fetch_retry(&ring->syncp, start));
 #endif
 		i += 2;
 #ifdef BP_EXTENDED_STATS
@@ -679,12 +679,12 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 
 #ifdef HAVE_NDO_GET_STATS64
 		do {
-			start = u64_stats_fetch_begin_irq(&ring->syncp);
+			start = u64_stats_fetch_begin(&ring->syncp);
 #endif
 			data[i] = ring->stats.packets;
 			data[i + 1] = ring->stats.bytes;
 #ifdef HAVE_NDO_GET_STATS64
-		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
+		} while (u64_stats_fetch_retry(&ring->syncp, start));
 #endif
 		i += 2;
 	}
@@ -705,12 +705,12 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 
 #ifdef HAVE_NDO_GET_STATS64
 		do {
-			start = u64_stats_fetch_begin_irq(&ring->syncp);
+			start = u64_stats_fetch_begin(&ring->syncp);
 #endif
 			data[i]   = ring->stats.packets;
 			data[i+1] = ring->stats.bytes;
 #ifdef HAVE_NDO_GET_STATS64
-		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
+		} while (u64_stats_fetch_retry(&ring->syncp, start));
 #endif
 		i += 2;
 #ifdef BP_EXTENDED_STATS

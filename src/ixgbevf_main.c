@@ -39,7 +39,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.17.13) RELEASE_TAG
+#define DRV_VERSION __stringify(4.18.7) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -5068,10 +5068,10 @@ static void ixgbevf_get_tx_ring_stats(struct rtnl_link_stats64 *stats,
 
 	if (ring) {
 		do {
-			start = u64_stats_fetch_begin_irq(&ring->syncp);
+			start = u64_stats_fetch_begin(&ring->syncp);
 			bytes = ring->stats.bytes;
 			packets = ring->stats.packets;
-		} while (u64_stats_fetch_retry_irq(&ring->syncp, start));
+		} while (u64_stats_fetch_retry(&ring->syncp, start));
 		stats->tx_bytes += bytes;
 		stats->tx_packets += packets;
 	}
@@ -5098,10 +5098,10 @@ static struct rtnl_link_stats64 *ixgbevf_get_stats64(struct net_device *netdev,
 		ring = adapter->rx_ring[i];
 		if (ring) {
 			do {
-				start = u64_stats_fetch_begin_irq(&ring->syncp);
+				start = u64_stats_fetch_begin(&ring->syncp);
 				bytes = ring->stats.bytes;
 				packets = ring->stats.packets;
-			} while (u64_stats_fetch_retry_irq(&ring->syncp,
+			} while (u64_stats_fetch_retry(&ring->syncp,
 							   start));
 			stats->rx_bytes += bytes;
 			stats->rx_packets += packets;

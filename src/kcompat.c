@@ -2667,7 +2667,7 @@ u64 _kc_pci_get_dsn(struct pci_dev *dev)
 }
 #endif /* 5.7.0 */
 
-#ifdef NEED_DEVM_KASPRINTF
+#ifdef NEED_DEVM_KVASPRINTF
 char *devm_kvasprintf(struct device *dev, gfp_t gfp, const char *fmt,
 		      va_list ap)
 {
@@ -2687,7 +2687,9 @@ char *devm_kvasprintf(struct device *dev, gfp_t gfp, const char *fmt,
 
 	return p;
 }
+#endif /* NEED_DEVM_KVASPRINTF */
 
+#ifdef NEED_DEVM_KASPRINTF
 char *devm_kasprintf(struct device *dev, gfp_t gfp, const char *fmt, ...)
 {
 	va_list ap;
