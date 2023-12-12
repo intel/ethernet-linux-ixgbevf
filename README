@@ -51,6 +51,19 @@ A version of the driver may already be included by your distribution and/or the
 kernel.org kernel.
 
 
+Related Documentation
+=====================
+
+See the "Intel(R) Ethernet Adapters and Devices User Guide" for additional
+information on features. It is available on the Intel website at either of the
+following:
+
+- https://cdrdv2.intel.com/v1/dl/getContent/705831
+-
+https://www.intel.com/content/www/us/en/download/19373/adapter-user-guide-for-in
+tel-ethernet-adapters.html
+
+
 Identifying Your Adapter
 ========================
 For information on how to identify your adapter, and for the latest Intel
@@ -152,6 +165,22 @@ kernel headers at a minimum. The RPM kernel-devel will usually fill in the link
 at /lib/modules/'uname -r'/build.
 
 
+Command Line Parameters
+=======================
+If the driver is built as a module, enter optional parameters on the command
+line with the following syntax:
+
+# modprobe ixgbevf [<option>=<VAL1>,<VAL2>,...]
+
+There needs to be a <VAL#> for each network port in the system supported by
+this driver. The values will be applied to each instance, in function order.
+For example:
+
+
+- The default value for each parameter is generally the recommended setting,
+unless otherwise noted.
+
+
 InterruptThrottleRate
 ---------------------
 Valid Range:
@@ -244,7 +273,7 @@ MAC address of the underlying PF (Physical Function) device.
 NAPI
 ----
 This driver supports NAPI (Rx polling mode). For more information on NAPI, see
-https://www.linuxfoundation.org/collaborate/workgroups/networking/napi.
+https://docs.kernel.org/networking/napi.html.
 
 
 Known Issues/Troubleshooting
