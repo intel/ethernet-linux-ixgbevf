@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2023 Intel Corporation. */
+/* Copyright(c) 1999 - 2024 Intel Corporation. */
 
 /* glue for the OS independent part of ixgbe
  * includes register access macros
@@ -86,6 +86,9 @@ enum {
 #define ERROR_REPORT2 ERROR_REPORT
 #define ERROR_REPORT3 ERROR_REPORT
 
+#ifndef uninitialized_var
+#define uninitialized_var(x) ((x) = (x))
+#endif
 #define UNREFERENCED_XPARAMETER
 #define UNREFERENCED_1PARAMETER(_p) do {		\
 	uninitialized_var(_p);				\
@@ -116,4 +119,5 @@ enum {
 #define e_info(msglvl, format, arg...) \
 	netif_info(adapter, msglvl, adapter->netdev, format, ## arg)
 
+#define ixgbe_lock mutex
 #endif /* _IXGBEVF_OSDEP_H_ */

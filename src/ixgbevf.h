@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2023 Intel Corporation. */
+/* Copyright(c) 1999 - 2024 Intel Corporation. */
 
 #ifndef _IXGBEVF_H_
 #define _IXGBEVF_H_
@@ -28,6 +28,8 @@
 #if IS_ENABLED(CONFIG_PCI_HYPERV)
 #include "ixgbe_hv_vf.h"
 #endif
+
+#include "ixgbe_type_e610.h"
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 #include <net/busy_poll.h>

@@ -1,78 +1,676 @@
-.\" LICENSE
-.\"
-.\" This software program is released under the terms of a license agreement between you ('Licensee') and Intel. Do not use or load this software or any associated materials (collectively, the 'Software') until you have carefully read the full terms and conditions of the LICENSE located in this software package. By loading or using the Software, you agree to the terms of this Agreement. If you do not agree with the terms of this Agreement, do not install or use the Software.
-.\"
-.\" * Other names and brands may be claimed as the property of others.
-.\"
+.\" Man page generated from reStructuredText.
 .
-.TH ixgbevf 1 "October 11, 2019"
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "IXGBEVF" "7" "July 09, 2024" "" "Linux ixgbevf README"
 .SH NAME
-ixgbevf \-This file describes the Linux* Base Driver
-for the Gigabit Family of Adapters.
-.SH SYNOPSIS
-.PD 0.4v
-modprobe ixgbevf [<option>=<VAL1>,<VAL2>,...]
-.PD 1v
-.SH DESCRIPTION
-This driver is intended for \fB2.6.x\fR or later kernels. A version of the driver may already be included by your distribution and/or the kernel.org kernel.
-
-This driver includes support for any 64 bit Linux supported system, x86_64, PPC64, ARM, etc.
-.LP
-This driver is only supported as a loadable module at this time. Intel is not supplying patches against the kernel source to allow for static linking of the drivers.
-
-
+ixgbevf \- ixgbevf Linux* Virtual Function (VF) Driver for Intel(R) Ethernet Network Connection
+.SS In This Page
+.INDENT 0.0
+.IP \(bu 2
+\fI\%ixgbevf Linux* Virtual Function (VF) Driver for Intel(R) Ethernet Network Connection\fP
+.INDENT 2.0
+.IP \(bu 2
+\fI\%Overview\fP
+.IP \(bu 2
+\fI\%Related Documentation\fP
+.IP \(bu 2
+\fI\%Identifying Your Adapter\fP
+.IP \(bu 2
+\fI\%Building and Installation\fP
+.IP \(bu 2
+\fI\%Command Line Parameters\fP
+.IP \(bu 2
+\fI\%Additional Features and Configurations\fP
+.IP \(bu 2
+\fI\%Known Issues/Troubleshooting\fP
+.IP \(bu 2
+\fI\%Support\fP
+.IP \(bu 2
+\fI\%License\fP
+.IP \(bu 2
+\fI\%Trademarks\fP
+.UNINDENT
+.UNINDENT
+.SH OVERVIEW
+.sp
+This ixgbevf virtual function driver supports Linux* kernel versions 2.6.x
+and newer.
+.sp
+The associated Physical Function (PF) driver for this driver is ixgbe.
+.sp
+The MTU size set on a VF should match the MTU size set on the PF. A mismatch in
+MTU sizes may cause unexpected results.
+.sp
+SR\-IOV requires the correct platform and OS support.
+.sp
+The guest OS loading this driver must support MSI\-X interrupts.
+.sp
+This driver is only supported as a loadable module at this time. Intel is not
+supplying patches against the kernel source to allow for static linking of the
+drivers.
+.sp
 For questions related to hardware requirements, refer to the documentation
-supplied with your Intel adapter. All hardware requirements listed apply to
-use with Linux.
-.LP
-.B InterruptThrottleRate
-.IP
-.B Valid Range:
-0=off
-1=dynamic
-<min_ITR>-<max_ITR>
-.IP
+supplied with your Intel adapter. All hardware requirements listed apply to use
+with Linux.
+.sp
+Driver information can be obtained using ethtool, lspci, and ip.
+.sp
+There is a limit of a total of 64 shared VLANs to 1 or more VFs.
+.sp
+A version of the driver may already be included by your distribution and/or the
+kernel.org kernel.
+.SH RELATED DOCUMENTATION
+.sp
+See the \(dqIntel(R) Ethernet Adapters and Devices User Guide\(dq for additional
+information on features. It is available on the Intel website at
+\fI\%https://cdrdv2.intel.com/v1/dl/getContent/705831\fP\&.
+.SH IDENTIFYING YOUR ADAPTER
+.sp
+For information on how to identify your adapter and for the latest Intel
+network drivers, refer to the Intel Support website at
+\fI\%https://www.intel.com/support\fP\&.
+.SH BUILDING AND INSTALLATION
+.SS How to Manually Build the Driver
+.INDENT 0.0
+.IP 1. 3
+Move the virtual function driver tar file to the directory of your choice.
+For example, use \fB/home/username/ixgbevf\fP or \fB/usr/local/src/ixgbevf\fP\&.
+.IP 2. 3
+Untar/unzip the archive, where \fB<x.x.x>\fP is the version number for the
+driver tar file:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+tar zxf ixgbevf\-<x.x.x>.tar.gz
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.IP 3. 3
+Change to the driver src directory, where \fB<x.x.x>\fP is the version number
+for the driver tar:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+cd ixgbevf\-<x.x.x>/src/
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.IP 4. 3
+Compile the driver module:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+make install
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The binary will be installed as:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+/lib/modules/<KERNEL VER>/updates/drivers/net/ethernet/intel/ixgbevf/ixgbevf.ko
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The install location listed above is the default location. This may differ
+for various Linux distributions.
+.IP 5. 3
+Load the module using the modprobe command.
+.sp
+To check the version of the driver and then load it:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+modinfo ixgbevf
+modprobe ixgbevf
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Alternately, make sure that any older ixgbevf drivers are removed from the
+kernel before loading the new module:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rmmod ixgbevf; modprobe ixgbevf
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.IP 6. 3
+Assign an IP address to the interface by entering the following, where
+\fB<ethX>\fP is the interface name that was shown in dmesg after modprobe:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ip address add <IP_address>/<netmask bits> dev <ethX>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.IP 7. 3
+Verify that the interface works. Enter the following, where \fBIP_address\fP
+is the IP address for another machine on the same subnet as the interface
+that is being tested:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ping <IP_address>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+For certain distributions like (but not limited to) Red Hat Enterprise
+Linux 7 and Ubuntu, once the driver is installed, you may need to update the
+initrd/initramfs file to prevent the OS loading old versions of the ixgbevf
+driver.
+.sp
+For Red Hat distributions:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+dracut \-\-force
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For Ubuntu:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+update\-initramfs \-u
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SS To Build a Binary RPM Package of This Driver
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+RPM functionality has only been tested in Red Hat distributions.
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.IP 1. 3
+Run the following command, where \fB<x.x.x\fP is the version number for the
+driver tar file:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rpmbuild \-tb ixbevf\-<x.x.x>.tar.gz
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 3.0
+.INDENT 3.5
+For the build to work properly, the currently running kernel MUST
+match the version and configuration of the installed kernel sources. If
+you have just recompiled the kernel, reboot the system before building.
+.UNINDENT
+.UNINDENT
+.IP 2. 3
+After building the RPM, the last few lines of the tool output contain the
+location of the RPM file that was built. Install the RPM with one of the
+following commands, where \fBRPM\fP is the location of the RPM file:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rpm \-Uvh <RPM>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or:
+.INDENT 3.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+dnf/yum localinstall <RPM>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+.INDENT 0.0
+.IP \(bu 2
+To compile the driver on some kernel/arch combinations, you may need to
+install a package with the development version of \fBlibelf\fP (e.g., \fBlibelf\-dev\fP,
+\fBlibelf\-devel\fP, \fBelfutils\-libelf\-devel\fP).
+.IP \(bu 2
+When compiling an out\-of\-tree driver, details will vary by distribution.
+However, you will usually need a kernel\-devel RPM or some RPM that provides
+the kernel headers at a minimum. The RPM \fBkernel\-devel\fP will usually fill in
+the link at \fB/lib/modules/\(aquname \-r\(aq/build\fP\&.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH COMMAND LINE PARAMETERS
+.sp
+If the driver is built as a module, enter optional parameters on the command
+line with the following syntax:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+modprobe ixgbevf [<option>=<VAL1>,<VAL2>,...]
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+There needs to be a \fB<VAL#>\fP for each network port in the system supported by
+this driver. The values will be applied to each instance, in function order.
+For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+modprobe ixgbevf InterruptThrottleRate=16000,16000
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.IP \(bu 2
+The default value for each parameter is generally the recommended setting,
+unless otherwise noted.
+.UNINDENT
+.SS InterruptThrottleRate
+.sp
+Valid Range:
+.INDENT 0.0
+.IP \(bu 2
+0 = off
+.IP \(bu 2
+1 = dynamic
+.IP \(bu 2
+\fB<min_ITR>\-<max_ITR>\fP
+.UNINDENT
+.sp
+Use ethtool to control \fBInterruptThrottleRate\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+ethtool \-C <ethX> rx\-usecs N
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+where \fBN\fP is the time in microseconds between each interrupt.
+.sp
 Interrupt Throttle Rate controls the number of interrupts each interrupt
 vector can generate per second. Increasing ITR lowers latency at the cost of
 increased CPU utilization, though it may help throughput in some circumstances.
-.IP
-0 = Setting InterruptThrottleRate to 0 turns off any interrupt moderation
-  and may improve small packet latency. However, this is generally not
-  suitable for bulk throughput traffic due to the increased CPU utilization
-  of the higher interrupt rate.
-  NOTES:
-  - On 82599, and X540, and X550-based adapters, disabling InterruptThrottleRate
-    will also result in the driver disabling HW RSC.
-  - On 82598-based adapters, disabling InterruptThrottleRate will also
-    result in disabling LRO (Large Receive Offloads).
-.IP
-1 = Setting InterruptThrottleRate to Dynamic mode attempts to moderate
-  interrupts per vector while maintaining very low latency. This can
-  sometimes cause extra CPU utilization. If planning on deploying ixgbevf
-  in a latency sensitive environment, this parameter should be considered.
-.IP
-<min_ITR>-<max_ITR> = 956-488281
-  Setting InterruptThrottleRate to a value greater or equal to <min_ITR>
-  will program the adapter to send at most that many interrupts
-  per second, even if more packets have come in. This reduces interrupt load
-  on the system and can lower CPU utilization under heavy load, but will
-  increase latency as packets are not processed as quickly.
-
-.LP
-.B ethtool
-.LP
-The driver utilizes the ethtool interface for driver configuration and diagnostics, as well as displaying statistical information. The latest ethtool version is required for this functionality. Download it at:
-https://kernel.org/pub/software/network/ethtool/
-
-
+.INDENT 0.0
+.IP \(bu 2
+0 = Setting \fBInterruptThrottleRate\fP to 0 turns off any interrupt moderation
+and may improve small packet latency. However, this is generally not suitable
+for bulk throughput traffic due to the increased CPU utilization
+of the higher interrupt rate.
+.sp
+\fBNOTE:\fP
+.INDENT 2.0
+.INDENT 3.5
+.INDENT 0.0
+.IP \(bu 2
+On 82599, X540, and X550\-based adapters, disabling \fBInterruptThrottleRate\fP
+will also result in the driver disabling HW RSC.
+.IP \(bu 2
+On 82598\-based adapters, disabling \fBInterruptThrottleRate\fP will also
+result in disabling LRO (Large Receive Offloads).
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.IP \(bu 2
+1 = Setting \fBInterruptThrottleRate\fP to Dynamic mode attempts to moderate
+interrupts per vector while maintaining very low latency. This can sometimes
+cause extra CPU utilization. If planning on deploying ixgbevf in a latency
+sensitive environment, this parameter should be considered.
+.IP \(bu 2
+\fB<min_ITR>\-<max_ITR>\fP = 956\-488281
+.sp
+Setting \fBInterruptThrottleRate\fP to a value greater or equal to \fB<min_ITR>\fP
+will program the adapter to send at most that many interrupts per second,
+even if more packets have come in. This reduces interrupt load on the system
+and can lower CPU utilization under heavy load, but will increase latency as
+packets are not processed as quickly.
+.UNINDENT
+.SH ADDITIONAL FEATURES AND CONFIGURATIONS
+.SS Configuring the Driver on Different Distributions
+.sp
+Configuring a network driver to load properly when the system is started is
+distribution dependent. Typically, the configuration process involves adding an
+alias line to \fB/etc/modules.conf\fP or \fB/etc/modprobe.conf\fP as well as editing
+other system startup scripts and/or configuration files. Many popular Linux
+distributions ship with tools to make these changes for you. To learn the
+proper way to configure a network device for your system, refer to your
+distribution documentation. If during this process you are asked for the driver
+or module name, the name for the Base Driver is ixgbe.
+.sp
+For example, if you install the ixgbevf driver for two adapters (eth0 and eth1)
+and want to set the interrupt mode to MSI\-X and MSI, respectively, add the
+following to \fBmodules.conf\fP or \fB/etc/modprobe.conf\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+alias eth0 ixgbevf
+alias eth1 ixgbevf
+options ixgbevf IntMode=2,1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Viewing Link Messages
+.sp
+Link messages will not be displayed to the console if the distribution is
+restricting system messages. In order to see network driver link messages on
+your console, set dmesg to eight by entering the following:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+dmesg \-n 8
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+This setting is not saved across reboots.
+.UNINDENT
+.UNINDENT
+.SS ethtool
+.sp
+The driver utilizes the ethtool interface for driver configuration and
+diagnostics, as well as displaying statistical information. The latest ethtool
+version is required for this functionality. Download it at
+\fI\%https://kernel.org/pub/software/network/ethtool/\fP\&.
+.SS MACVLAN
+.sp
+This driver supports MACVLAN. Kernel support for MACVLAN can be tested by
+checking if the MACVLAN driver is loaded. To check this, run:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+lsmod | grep macvlan
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To load the MACVLAN driver, run:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+modprobe macvlan
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+In passthru mode, you can only set up one MACVLAN device. It will
+inherit the MAC address of the underlying PF (Physical Function) device.
+.UNINDENT
+.UNINDENT
+.SS NAPI
+.sp
+This driver supports NAPI (Rx polling mode). For more information on NAPI, see
+\fI\%https://docs.kernel.org/networking/napi.html\fP\&.
+.SH KNOWN ISSUES/TROUBLESHOOTING
+.SS Software Issues
+.sp
+If your Intel Ethernet Network Connection is not working after installing the
+driver, verify that you have installed the correct driver.
+.SS Compiling the driver
+.sp
+When trying to compile the driver by running \fBmake install\fP, the following error
+may occur:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+Linux kernel source not configured \- missing version.h
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To resolve this issue, create the \fBversion.h\fP file by going to the Linux source
+tree and entering:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+make include/linux/version.h
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS MAC address of Virtual Function changes unexpectedly
+.sp
+If a Virtual Function\(aqs MAC address is not assigned in the host, then the VF
+(virtual function) driver will use a random MAC address. This random MAC
+address may change each time the VF driver is reloaded. You can assign a static
+MAC address in the host machine. This static MAC address will survive a VF
+driver reload.
+.SS dmesg: Unable to start \- perhaps the PF Driver isn\(aqt up yet
+.sp
+This message is posted when the PF interface is down when you try to change the
+number of Tx or Rx queues on the VF interface. To resolve the issue, bring the
+PF interface up and reload the VF driver.
+.SS SR\-IOV virtual functions have identical MAC addresses
+.sp
+When you create multiple SR\-IOV virtual functions, the VFs may have identical
+MAC addresses. Only one VF will pass traffic, and all traffic on other VFs with
+identical MAC addresses will fail. This is related to the
+\fBMACAddressPolicy=persistent\fP setting in
+\fB/usr/lib/systemd/network/99\-default.link\fP\&.
+.sp
+To resolve this issue, edit the \fB/usr/lib/systemd/network/99\-default.link\fP
+file and change the \fBMACAddressPolicy\fP line to \fBMACAddressPolicy=none\fP\&. For
+more information, see the systemd.link man page.
+.SS Multiple interfaces on same Ethernet broadcast network
+.sp
+Due to the default ARP behavior on Linux, it is not possible to have one system
+on two IP networks in the same Ethernet broadcast domain (non\-partitioned
+switch) behave as expected. All Ethernet interfaces will respond to IP traffic
+for any IP address assigned to the system. This results in unbalanced receive
+traffic.
+.sp
+If you have multiple interfaces in a server, either turn on ARP filtering by
+entering the following:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo 1 > /proc/sys/net/ipv4/conf/all/arp_filter
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This only works if your kernel\(aqs version is higher than 2.4.5.
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+This setting is not saved across reboots. The configuration change
+can be made permanent by adding the following line to the file
+\fB/etc/sysctl.conf\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+net.ipv4.conf.all.arp_filter = 1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.sp
+Alternatively, you can install the interfaces in separate broadcast domains
+(either in different switches or in a switch partitioned to VLANs).
+.SS Build Error with Asianux 3.0 \- Redefinition of typedef \fBirq_handler_t\fP
+.sp
+Some systems may experience build issues due to the redefinition of
+\fBirq_handler_t\fP\&. To resolve this issue, build the driver using the
+command:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+make CFLAGS_EXTRA=\-DAX_RELEASE_CODE=1 install
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Rx page allocation errors
+.sp
+The error, \(dqPage allocation failure. order:0\(dq can occur under stress with kernels
+2.6.25 and newer. This is caused by the way the Linux kernel reports this
+stressed condition.
+.SS Host may reboot after removing PF when VF is active in guest
+.sp
+When using kernel versions earlier than 3.2, do not unload the PF driver with
+active VFs. Doing this will cause your VFs to stop working until you reload
+the PF driver and may cause a spontaneous reboot of your system.
+.sp
+Prior to unloading the PF driver, you must first ensure that all VFs are
+no longer active. Do this by shutting down all VMs and unloading the VF driver.
 .SH SUPPORT
-.LP
-For additional information regarding building and installation, see the
-README
-included with the driver.
-For general information, go to the Intel support website at:
-.B http://www.intel.com/support/
-
-.LP
-If an issue is identified with the released source code on a supported kernel with a supported adapter, email the specific information related to the issue to e1000-devel@lists.sf.net.
-.LP
+.sp
+For general information, go to the Intel support website at
+\fI\%https://www.intel.com/support/\fP
+.sp
+or the Intel Ethernet Linux project hosted by GitHub at
+\fI\%https://github.com/intel/ethernet\-linux\-ixgbevf\fP
+.sp
+If an issue is identified with the released source code on a supported kernel
+with a supported adapter, contact Intel Customer Support at
+\fI\%https://www.intel.com/content/www/us/en/support/products/36773/ethernet\-products.html\fP
+.SH LICENSE
+.sp
+This program is free software; you can redistribute it and/or modify it under
+the terms and conditions of the GNU General Public License, version 2, as
+published by the Free Software Foundation.
+.sp
+This program is distributed in the hope it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+.sp
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc., 51 Franklin
+St \- Fifth Floor, Boston, MA 02110\-1301 USA.
+.sp
+The full GNU General Public License is included in this distribution in the
+file called \(dqCOPYING\(dq.
+.SH TRADEMARKS
+.sp
+Intel is a trademark or registered trademark of Intel Corporation or its
+subsidiaries in the United States and/or other countries.
+.sp
+Other names and brands may be claimed as the property of others.
+.SH AUTHOR
+Intel
+.SH COPYRIGHT
+1999 - 2024, Intel Corporation
+.\" Generated by docutils manpage writer.
+.

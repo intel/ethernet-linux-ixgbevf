@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright(c) 1999 - 2023 Intel Corporation.
+# Copyright(c) 1999 - 2024 Intel Corporation.
 
 # updates for the system pci.ids file
 #
@@ -19,3 +19,4 @@
 	15a9  X552 Virtual Function
 	15b4  X553 Virtual Function
 	15c5  X553 Virtual Function
+	57ad  E610 Virtual Function

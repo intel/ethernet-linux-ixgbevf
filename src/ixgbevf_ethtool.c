@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2023 Intel Corporation. */
+/* Copyright(c) 1999 - 2024 Intel Corporation. */
 
 /* ethtool support for ixgbe */
 
@@ -72,6 +72,7 @@ static struct ixgbe_stats ixgbe_gstrings_stats[] = {
 
 #define IXGBEVF_STATS_LEN (IXGBEVF_GLOBAL_STATS_LEN + IXGBEVF_QUEUE_STATS_LEN)
 #endif /* ETHTOOL_GSTATS */
+
 #ifdef ETHTOOL_TEST
 static const char ixgbe_gstrings_test[][ETH_GSTRING_LEN] = {
 	"Register test  (offline)",
@@ -374,10 +375,10 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
-	strlcpy(drvinfo->driver, ixgbevf_driver_name, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, ixgbevf_driver_version,
+	strscpy(drvinfo->driver, ixgbevf_driver_name, sizeof(drvinfo->driver));
+	strscpy(drvinfo->version, ixgbevf_driver_version,
 		sizeof(drvinfo->version));
-	strlcpy(drvinfo->bus_info, pci_name(adapter->pdev),
+	strscpy(drvinfo->bus_info, pci_name(adapter->pdev),
 		sizeof(drvinfo->bus_info));
 #if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
 
@@ -1506,20 +1507,33 @@ static u32 ixgbevf_get_rxfh_key_size(struct net_device *netdev)
 }
 
 #ifdef HAVE_RXFH_HASHFUNC
+#ifdef HAVE_ETHTOOL_RXFH_PARAM
+static int ixgbevf_get_rxfh(struct net_device *netdev,
+			    struct ethtool_rxfh_param *rxfh)
+#else
 static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key,
 			    u8 *hfunc)
+#endif /* HAVE_ETHTOOL_RXFH_PARAM */
 #else
 static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 #endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+#ifdef HAVE_ETHTOOL_RXFH_PARAM
+	u32 *indir = rxfh->indir;
+	u8 *key = rxfh->key;
+#endif /* HAVE_ETHTOOL_RXFH_PARAM */
 	int err = 0;
 
 #ifdef HAVE_RXFH_HASHFUNC
+#ifdef HAVE_ETHTOOL_RXFH_PARAM
+	rxfh->hfunc = ETH_RSS_HASH_TOP;
+#else
 	if (hfunc)
 		*hfunc = ETH_RSS_HASH_TOP;
-
+#endif /* HAVE_ETHTOOL_RXFH_PARAM */
 #endif
+
 	if (adapter->hw.mac.type >= ixgbe_mac_X550_vf) {
 		if (key)
 			memcpy(key, adapter->rss_key,

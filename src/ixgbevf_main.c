@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2023 Intel Corporation. */
+/* Copyright(c) 1999 - 2024 Intel Corporation. */
 
 /******************************************************************************
  Copyright (c)2006 - 2007 Myricom, Inc. for some LRO specific code
@@ -39,12 +39,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.18.9) RELEASE_TAG
+#define DRV_VERSION __stringify(4.20.5) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2023 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2024 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -71,12 +71,18 @@ static struct ixgbevf_info ixgbevf_X550EM_a_vf_info = {
 	.flags	= 0,
 };
 
+static struct ixgbevf_info ixgbevf_E610_vf_info = {
+	.mac    = ixgbe_mac_E610_vf,
+	.flags  = 0,
+};
+
 enum ixgbevf_boards {
 	board_82599_vf,
 	board_X540_vf,
 	board_X550_vf,
 	board_X550EM_x_vf,
 	board_X550EM_a_vf,
+	board_E610_vf,
 };
 
 static const struct ixgbevf_info *ixgbevf_info_tbl[] = {
@@ -85,6 +91,7 @@ static const struct ixgbevf_info *ixgbevf_info_tbl[] = {
 	[board_X550_vf]		= &ixgbevf_X550_vf_info,
 	[board_X550EM_x_vf]	= &ixgbevf_X550EM_x_vf_info,
 	[board_X550EM_a_vf]	= &ixgbevf_X550EM_a_vf_info,
+	[board_E610_vf]     = &ixgbevf_E610_vf_info,
 };
 
 /* ixgbevf_pci_tbl - PCI Device ID Table
@@ -116,6 +123,7 @@ static struct pci_device_id ixgbevf_pci_tbl[] = {
 #if IS_ENABLED(CONFIG_PCI_HYPERV)
 	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_X550EM_A_VF_HV), board_X550EM_a_vf },
 #endif
+	{PCI_VDEVICE(INTEL, IXGBE_DEV_ID_E610_VF), board_E610_vf },
 	/* required last entry */
 	{ .device = 0 }
 };
@@ -3609,6 +3617,12 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 	case IXGBE_DEV_ID_X550EM_A_VF_HV:
 		ixgbevf_hv_init_ops_vf(hw);
 		break;
+	case IXGBE_DEV_ID_E610_VF:
+		if (hw->subsystem_device_id == IXGBE_SUBDEV_ID_E610_VF_HV) {
+			ixgbevf_hv_init_ops_vf(hw);
+			break;
+		}
+		fallthrough;
 	default:
 		ixgbe_init_ops_vf(hw);
 		break;
@@ -3633,12 +3647,12 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 
 	err = hw->mac.ops.reset_hw(hw);
 	if (err) {
-		dev_info(pci_dev_to_dev(pdev),
+		dev_info(&pdev->dev,
 			 "PF still in reset state.  Is the PF interface up?\n");
 	} else {
 		err = hw->mac.ops.init_hw(hw);
 		if (err) {
-			dev_err(pci_dev_to_dev(pdev),
+			dev_err(&pdev->dev,
 				"init_shared_code failed: %d\n", err);
 			return err;
 		}
@@ -5414,14 +5428,14 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	if (err)
 		return err;
 
-	if (!dma_set_mask_and_coherent(pci_dev_to_dev(pdev),
+	if (!dma_set_mask_and_coherent(&pdev->dev,
 				       DMA_BIT_MASK(64))) {
 		pci_using_dac = 1;
 	} else {
-		err = dma_set_mask_and_coherent(pci_dev_to_dev(pdev),
+		err = dma_set_mask_and_coherent(&pdev->dev,
 						DMA_BIT_MASK(32));
 		if (err) {
-			dev_err(pci_dev_to_dev(pdev), "No usable DMA configuration, aborting\n");
+			dev_err(&pdev->dev, "No usable DMA configuration, aborting\n");
 			goto err_dma;
 		}
 		pci_using_dac = 0;
@@ -5429,12 +5443,14 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 
 	err = pci_request_regions(pdev, ixgbevf_driver_name);
 	if (err) {
-		dev_err(pci_dev_to_dev(pdev),
+		dev_err(&pdev->dev,
 			"pci_request_regions failed 0x%x\n", err);
 		goto err_pci_reg;
 	}
 
+#ifdef HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING
 	pci_enable_pcie_error_reporting(pdev);
+#endif /* HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING */
 
 	pci_set_master(pdev);
 
@@ -5573,7 +5589,7 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	ether_addr_copy(netdev->perm_addr, adapter->hw.mac.addr);
 
 	if (!is_valid_ether_addr(netdev->dev_addr)) {
-		dev_info(pci_dev_to_dev(pdev),
+		dev_info(&pdev->dev,
 			 "ixgbevf: invalid MAC address\n");
 		err = -EIO;
 		goto err_sw_init;
@@ -5631,6 +5647,9 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 		break;
 	case ixgbe_mac_X540_vf:
 		DPRINTK(PROBE, INFO, "Intel(R) X540 Virtual Function\n");
+		break;
+	case ixgbe_mac_E610_vf:
+		DPRINTK(PROBE, INFO, "Intel(R) E610 Virtual Function\n");
 		break;
 	case ixgbe_mac_82599_vf:
 	default:
@@ -5701,7 +5720,9 @@ static void __devexit ixgbevf_remove(struct pci_dev *pdev)
 	disable_dev = !test_and_set_bit(__IXGBEVF_DISABLED, &adapter->state);
 	free_netdev(netdev);
 
+#ifdef HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING
 	pci_disable_pcie_error_reporting(pdev);
+#endif /* HAVE_PCI_ENABLE_PCIE_ERROR_REPORTING */
 
 	if (disable_dev)
 		pci_disable_device(pdev);
@@ -5855,7 +5876,7 @@ static struct pci_driver ixgbevf_driver = {
 	.name     = ixgbevf_driver_name,
 	.id_table = ixgbevf_pci_tbl,
 	.probe    = ixgbevf_probe,
-	.remove   = __devexit_p(ixgbevf_remove),
+	.remove   = ixgbevf_remove,
 #ifdef CONFIG_PM
 	/* Power Management Hooks */
 	.suspend  = ixgbevf_suspend,

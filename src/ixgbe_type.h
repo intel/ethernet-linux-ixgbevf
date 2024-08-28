@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2023 Intel Corporation. */
+/* Copyright(c) 1999 - 2024 Intel Corporation. */
 
 #ifndef _IXGBE_TYPE_H_
 #define _IXGBE_TYPE_H_
@@ -43,6 +43,7 @@
  */
 
 #include "ixgbevf_osdep.h"
+#include "ixgbe_type_e610.h"
 
 /* Override this by setting __iomem in your ixgbe_osdep.h header */
 
@@ -109,12 +110,19 @@
 #define IXGBE_DEV_ID_X550EM_X_10G_T		0x15AD
 #define IXGBE_DEV_ID_X550EM_X_1G_T		0x15AE
 #define IXGBE_DEV_ID_X550EM_X_XFI		0x15B0
+#define IXGBE_DEV_ID_E610_BACKPLANE		0x57AE
+#define IXGBE_DEV_ID_E610_SFP			0x57AF
+#define IXGBE_DEV_ID_E610_10G_T			0x57B0
+#define IXGBE_DEV_ID_E610_2_5G_T		0x57B1
+#define IXGBE_DEV_ID_E610_SGMII			0x57B2
 #define IXGBE_DEV_ID_X550_VF_HV			0x1564
 #define IXGBE_DEV_ID_X550_VF			0x1565
 #define IXGBE_DEV_ID_X550EM_A_VF		0x15C5
 #define IXGBE_DEV_ID_X550EM_A_VF_HV		0x15B4
 #define IXGBE_DEV_ID_X550EM_X_VF		0x15A8
 #define IXGBE_DEV_ID_X550EM_X_VF_HV		0x15A9
+#define IXGBE_DEV_ID_E610_VF			0x57AD
+#define IXGBE_SUBDEV_ID_E610_VF_HV		0x0001
 
 #define IXGBE_CAT(r,m) IXGBE_##r##m
 
@@ -1848,6 +1856,7 @@ enum {
 #define IXGBE_EICR_MAILBOX	0x00080000 /* VF to PF Mailbox Interrupt */
 #define IXGBE_EICR_LSC		0x00100000 /* Link Status Change */
 #define IXGBE_EICR_LINKSEC	0x00200000 /* PN Threshold */
+#define IXGBE_EICR_FW_EVENT	0x00200000 /* Async FW event */
 #define IXGBE_EICR_MNG		0x00400000 /* Manageability Event Interrupt */
 #define IXGBE_EICR_TS		0x00800000 /* Thermal Sensor Event */
 #define IXGBE_EICR_TIMESYNC	0x01000000 /* Timesync Event */
@@ -1883,6 +1892,7 @@ enum {
 #define IXGBE_EICS_PCI		IXGBE_EICR_PCI /* PCI Exception */
 #define IXGBE_EICS_MAILBOX	IXGBE_EICR_MAILBOX   /* VF to PF Mailbox Int */
 #define IXGBE_EICS_LSC		IXGBE_EICR_LSC /* Link Status Change */
+#define IXGBE_EICS_FW_EVENT	IXGBE_EICR_FW_EVENT /* Async FW event */
 #define IXGBE_EICS_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
 #define IXGBE_EICS_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
 #define IXGBE_EICS_GPI_SDP0	IXGBE_EICR_GPI_SDP0 /* SDP0 Gen Purpose Int */
@@ -1904,6 +1914,7 @@ enum {
 #define IXGBE_EIMS_PCI		IXGBE_EICR_PCI /* PCI Exception */
 #define IXGBE_EIMS_MAILBOX	IXGBE_EICR_MAILBOX   /* VF to PF Mailbox Int */
 #define IXGBE_EIMS_LSC		IXGBE_EICR_LSC /* Link Status Change */
+#define IXGBE_EIMS_FW_EVENT	IXGBE_EICR_FW_EVENT /* Async FW event */
 #define IXGBE_EIMS_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
 #define IXGBE_EIMS_TS		IXGBE_EICR_TS /* Thermal Sensor Event */
 #define IXGBE_EIMS_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
@@ -1926,6 +1937,7 @@ enum {
 #define IXGBE_EIMC_PCI		IXGBE_EICR_PCI /* PCI Exception */
 #define IXGBE_EIMC_MAILBOX	IXGBE_EICR_MAILBOX /* VF to PF Mailbox Int */
 #define IXGBE_EIMC_LSC		IXGBE_EICR_LSC /* Link Status Change */
+#define IXGBE_EIMC_FW_EVENT	IXGBE_EICR_FW_EVENT /* Async FW event */
 #define IXGBE_EIMC_MNG		IXGBE_EICR_MNG /* MNG Event Interrupt */
 #define IXGBE_EIMC_TIMESYNC	IXGBE_EICR_TIMESYNC /* Timesync Event */
 #define IXGBE_EIMC_GPI_SDP0	IXGBE_EICR_GPI_SDP0 /* SDP0 Gen Purpose Int */
@@ -2319,6 +2331,7 @@ enum {
 #define IXGBE_82599_SERIAL_NUMBER_MAC_ADDR	0x11
 #define IXGBE_X550_SERIAL_NUMBER_MAC_ADDR	0x04
 
+#define IXGBE_PCIE_MSIX_LKV_CAPS		0xB2
 #define IXGBE_PCIE_MSIX_82599_CAPS	0x72
 #define IXGBE_MAX_MSIX_VECTORS_82599	0x40
 #define IXGBE_PCIE_MSIX_82598_CAPS	0x62
@@ -2438,6 +2451,7 @@ enum {
 #define IXGBE_PCI_DEVICE_STATUS		0xAA
 #define IXGBE_PCI_DEVICE_STATUS_TRANSACTION_PENDING	0x0020
 #define IXGBE_PCI_LINK_STATUS		0xB2
+#define IXGBE_PCI_LINK_STATUS_E610	0x82
 #define IXGBE_PCI_DEVICE_CONTROL2	0xC8
 #define IXGBE_PCI_LINK_WIDTH		0x3F0
 #define IXGBE_PCI_LINK_WIDTH_1		0x10
@@ -2448,6 +2462,7 @@ enum {
 #define IXGBE_PCI_LINK_SPEED_2500	0x1
 #define IXGBE_PCI_LINK_SPEED_5000	0x2
 #define IXGBE_PCI_LINK_SPEED_8000	0x3
+#define IXGBE_PCI_LINK_SPEED_16000	0x4
 #define IXGBE_PCI_HEADER_TYPE_REGISTER	0x0E
 #define IXGBE_PCI_HEADER_TYPE_MULTIFUNC	0x80
 #define IXGBE_PCI_DEVICE_CONTROL2_16ms	0x0005
@@ -2575,6 +2590,7 @@ enum {
 #define IXGBE_RXMTRL_V2_MGMT_MSG	0x0D00
 
 #define IXGBE_FCTRL_SBP		0x00000002 /* Store Bad Packet */
+#define IXGBE_FCTRL_TPE		0x00000080 /* Tag Promiscuous Ena*/
 #define IXGBE_FCTRL_MPE		0x00000100 /* Multicast Promiscuous Ena*/
 #define IXGBE_FCTRL_UPE		0x00000200 /* Unicast Promiscuous Ena */
 #define IXGBE_FCTRL_BAM		0x00000400 /* Broadcast Accept Mode */
@@ -2642,6 +2658,7 @@ enum {
 /* Multiple Transmit Queue Command Register */
 #define IXGBE_MTQC_RT_ENA	0x1 /* DCB Enable */
 #define IXGBE_MTQC_VT_ENA	0x2 /* VMDQ2 Enable */
+#define IXGBE_MTQC_NUM_TC_OR_Q  0xC /* Numer of TCs or TxQs per pool */
 #define IXGBE_MTQC_64Q_1PB	0x0 /* 64 queues 1 pack buffer */
 #define IXGBE_MTQC_32VF		0x8 /* 4 TX Queues per pool w/32VF's */
 #define IXGBE_MTQC_64VF		0x4 /* 2 TX Queues per pool w/64VF's */
@@ -3329,6 +3346,7 @@ struct ixgbe_adv_tx_context_desc {
 #define IXGBE_ADVTXD_POPTS_RSV		0x00002000 /* POPTS Reserved */
 #define IXGBE_ADVTXD_PAYLEN_SHIFT	14 /* Adv desc PAYLEN shift */
 #define IXGBE_ADVTXD_MACLEN_SHIFT	9  /* Adv ctxt desc mac len shift */
+#define IXGBE_ADVTXD_MACLEN_MASK	(0x7F << IXGBE_ADVTXD_MACLEN_SHIFT) /* Adv ctxt desc mac len mask */
 #define IXGBE_ADVTXD_VLAN_SHIFT		16  /* Adv ctxt vlan tag shift */
 #define IXGBE_ADVTXD_TUCMD_IPV4		0x00000400 /* IP Packet Type: 1=IPv4 */
 #define IXGBE_ADVTXD_TUCMD_IPV6		0x00000000 /* IP Packet Type: 0=IPv6 */
@@ -3606,6 +3624,8 @@ enum ixgbe_mac_type {
 	ixgbe_mac_X550_vf,
 	ixgbe_mac_X550EM_x_vf,
 	ixgbe_mac_X550EM_a_vf,
+	ixgbe_mac_E610,
+	ixgbe_mac_E610_vf,
 	ixgbe_num_macs
 };
 
@@ -3680,6 +3700,8 @@ enum ixgbe_media_type {
 	ixgbe_media_type_backplane,
 	ixgbe_media_type_cx4,
 	ixgbe_media_type_virtual,
+	ixgbe_media_type_da,
+	ixgbe_media_type_aui
 };
 
 /* Flow Control Settings */
@@ -3688,6 +3710,7 @@ enum ixgbe_fc_mode {
 	ixgbe_fc_rx_pause,
 	ixgbe_fc_tx_pause,
 	ixgbe_fc_full,
+	ixgbe_fc_pfc,
 	ixgbe_fc_default
 };
 
@@ -3720,6 +3743,7 @@ enum ixgbe_bus_speed {
 	ixgbe_bus_speed_2500	= 2500,
 	ixgbe_bus_speed_5000	= 5000,
 	ixgbe_bus_speed_8000	= 8000,
+	ixgbe_bus_speed_16000   = 16000,
 	ixgbe_bus_speed_reserved
 };
 
@@ -3864,6 +3888,7 @@ struct ixgbe_eeprom_operations {
 	s32 (*validate_checksum)(struct ixgbe_hw *, u16 *);
 	s32 (*update_checksum)(struct ixgbe_hw *);
 	s32 (*calc_checksum)(struct ixgbe_hw *);
+	s32 (*read_pba_string)(struct ixgbe_hw *, u8 *, u32);
 };
 
 /* Error Codes */
@@ -3908,6 +3933,23 @@ struct ixgbe_eeprom_operations {
 #define IXGBE_ERR_MBX				-41
 #define IXGBE_ERR_MBX_NOMSG			-42
 #define IXGBE_ERR_TIMEOUT			-43
+#define IXGBE_ERR_NOT_SUPPORTED			-45
+#define IXGBE_ERR_OUT_OF_RANGE			-46
+
+#define IXGBE_ERR_NVM				-50
+#define IXGBE_ERR_NVM_CHECKSUM			-51
+#define IXGBE_ERR_BUF_TOO_SHORT			-52
+#define IXGBE_ERR_NVM_BLANK_MODE		-53
+#define IXGBE_ERR_INVAL_SIZE			-54
+#define IXGBE_ERR_DOES_NOT_EXIST		-55
+
+#define IXGBE_ERR_ACI_ERROR			-100
+#define IXGBE_ERR_ACI_DISABLED			-101
+#define IXGBE_ERR_ACI_TIMEOUT			-102
+#define IXGBE_ERR_ACI_BUSY			-103
+#define IXGBE_ERR_ACI_NO_WORK			-104
+#define IXGBE_ERR_ACI_NO_EVENTS			-105
+#define IXGBE_ERR_FW_API_VER			-106
 #define IXGBE_NOT_IMPLEMENTED			0x7FFFFFFF
 
 #define IXGBE_FUSES0_GROUP(_i)		(0x11158 + ((_i) * 4))
