@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0
-# Copyright(c) 1999 - 2024 Intel Corporation.
+# Copyright(c) 1999 - 2025 Intel Corporation.
 
 # to be sourced
 

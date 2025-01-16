@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2024 Intel Corporation. */
+/* Copyright(c) 1999 - 2025 Intel Corporation. */
 
 /******************************************************************************
  Copyright (c)2006 - 2007 Myricom, Inc. for some LRO specific code
@@ -39,12 +39,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(4.21.25) RELEASE_TAG
+#define DRV_VERSION __stringify(5.0.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2024 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2025 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,

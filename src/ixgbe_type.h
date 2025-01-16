@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2024 Intel Corporation. */
+/* Copyright(c) 1999 - 2025 Intel Corporation. */
 
 #ifndef _IXGBE_TYPE_H_
 #define _IXGBE_TYPE_H_
@@ -122,7 +122,7 @@
 #define IXGBE_DEV_ID_X550EM_X_VF		0x15A8
 #define IXGBE_DEV_ID_X550EM_X_VF_HV		0x15A9
 #define IXGBE_DEV_ID_E610_VF			0x57AD
-#define IXGBE_SUBDEV_ID_E610_VF_HV		0x0001
+#define IXGBE_SUBDEV_ID_E610_VF_HV		0x00FF
 
 #define IXGBE_CAT(r,m) IXGBE_##r##m
 
