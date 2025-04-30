@@ -374,4 +374,8 @@ DEFINE_LOCK_GUARD_1(write_lock_irqsave, rwlock_t,
 
 DEFINE_LOCK_GUARD_0(rcu, rcu_read_lock(), rcu_read_unlock())
 
+#include <linux/devlink.h>
+
+DEFINE_GUARD(devl, struct devlink *, devl_lock(_T), devl_unlock(_T));
+
 #endif /* _KCOMPAT_CLENAUP_H_ */
