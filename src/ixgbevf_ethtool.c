@@ -1384,6 +1384,7 @@ static int ixgbevf_get_reta_locked(struct ixgbe_hw *hw, u32 *reta,
 	 * is not supported for this device type.
 	 */
 	switch (hw->api_version) {
+	case ixgbe_mbox_api_16:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_12:
@@ -1452,6 +1453,7 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	 * or if the operation is not supported for this device type.
 	 */
 	switch (hw->api_version) {
+	case ixgbe_mbox_api_16:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_12:

@@ -39,7 +39,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(5.1.5) RELEASE_TAG
+#define DRV_VERSION __stringify(5.1.6) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -2788,7 +2788,8 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_15,
+	int api[] = { ixgbe_mbox_api_16,
+		      ixgbe_mbox_api_15,
 		      ixgbe_mbox_api_13,
 		      ixgbe_mbox_api_12,
 		      ixgbe_mbox_api_11,
@@ -2805,7 +2806,7 @@ static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 		idx++;
 	}
 
-	if (hw->api_version >= ixgbe_mbox_api_15)
+	if (hw->api_version == ixgbe_mbox_api_15)
 		ixgbe_upgrade_mbx_params_vf(hw);
 
 	spin_unlock_bh(&adapter->mbx_lock);
@@ -3045,7 +3046,7 @@ void ixgbevf_down(struct ixgbevf_adapter *adapter)
 
 	ixgbevf_napi_disable_all(adapter);
 
-	del_timer_sync(&adapter->service_timer);
+	timer_delete_sync(&adapter->service_timer);
 
 	/* disable transmits in the hardware now that interrupts are off */
 	for (i = 0; i < adapter->num_tx_queues; i++) {
@@ -3184,9 +3185,10 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 		case ixgbe_mbox_api_12:
 		case ixgbe_mbox_api_13:
 		case ixgbe_mbox_api_15:
+		case ixgbe_mbox_api_16:
 			if (adapter->xdp_prog &&
 			    hw->mac.max_tx_queues == rss)
-				rss = rss > 3 ? 2 : 1;
+				rss = 1;
 
 			adapter->num_rx_queues = rss;
 #ifdef HAVE_TX_MQ

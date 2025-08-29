@@ -715,6 +715,8 @@ struct ixgbe_aci_cmd_list_caps_elem {
 #define IXGBE_ACI_CAPS_NEXT_CLUSTER_ID			0x0096
 #ifndef NO_PTP_SUPPORT
 #define IXGBE_ACI_CAPS_PTP_BY_PHY			0x0097
+#define IXGBE_ACI_CAPS_PTP_BY_PHY_SUPP			BIT(0)
+#define IXGBE_ACI_CAPS_PTP_BY_PHY_LL			BIT(1)
 #endif /* !NO_PTP_SUPPORT */
 	u8 major_ver;
 	u8 minor_ver;
@@ -2337,7 +2339,8 @@ struct ixgbe_hw_common_caps {
 	bool orom_recovery_update;
 	bool next_cluster_id_support;
 #ifndef NO_PTP_SUPPORT
-	bool ptp_by_phy_support;
+	bool ptp_by_phy_support : 1;
+	bool ptp_by_phy_ll : 1;
 #endif /* !NO_PTP_SUPPORT */
 };
 
@@ -2543,12 +2546,16 @@ struct ixgbe_nvm_access_data {
 };
 
 #ifndef NO_PTP_SUPPORT
-#define PROXY_TX_TS		0x00000100
-#define PROXY_STS		0x00000104
+#define PROXY_TX_TS_LOW		0x00000100
+#define PROXY_TX_TS_HIGH	0x00000104
+#define PROXY_TX_STS		0x00000108
+#define PROXY_RX_TS_LOW		0x00002410
+#define PROXY_RX_TS_HIGH	0x00002414
+#define PROXY_RX_STS		0x00002418
 #define PROXY_STS_SEQ_ID	GENMASK(15, 0)
-#define PROXY_STS_ERR		GENMASK(29, 15)
-#define PROXY_STS_TX_TS_RDY	BIT(30)
-#define PROXY_STS_TX_TS_INT	BIT(31)
+#define PROXY_STS_ERR		GENMASK(29, 16)
+#define PROXY_STS_TS_RDY	BIT(30)
+#define PROXY_STS_TS_INT	BIT(31)
 
 #endif /* !NO_PTP_SUPPORT */
 #endif /* _IXGBE_TYPE_E610_H_ */
