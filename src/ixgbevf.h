@@ -4,6 +4,8 @@
 #ifndef _IXGBEVF_H_
 #define _IXGBEVF_H_
 
+#include "kcompat.h"
+
 #include <linux/pci.h>
 #include <linux/netdevice.h>
 #include <linux/vmalloc.h>
@@ -20,8 +22,6 @@
 #ifdef HAVE_XDP_SUPPORT
 #include <net/xdp.h>
 #endif /* HAVE_XDP_SUPPORT */
-
-#include "kcompat.h"
 
 #include "ixgbe_type.h"
 #include "ixgbe_vf.h"
@@ -503,6 +503,8 @@ struct ixgbevf_adapter {
 #endif
 
 	u32 tx_timeout_count;
+
+	u32 pf_features;
 
 	/* structs defined in ixgbe_vf.h */
 	struct ixgbe_hw hw;

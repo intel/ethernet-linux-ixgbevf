@@ -34,6 +34,7 @@ s32 ixgbe_init_ops_vf(struct ixgbe_hw *hw)
 	hw->mac.ops.stop_adapter = ixgbe_stop_adapter_vf;
 	hw->mac.ops.get_bus_info = NULL;
 	hw->mac.ops.negotiate_api_version = ixgbevf_negotiate_api_version;
+	hw->mac.ops.negotiate_features = ixgbevf_negotiate_features_vf,
 
 	/* Link */
 	hw->mac.ops.setup_link = ixgbe_setup_mac_link_vf;
@@ -405,6 +406,7 @@ s32 ixgbevf_update_xcast_mode(struct ixgbe_hw *hw, int xcast_mode)
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_16:
+	case ixgbe_mbox_api_17:
 		break;
 	default:
 		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
@@ -470,6 +472,7 @@ int ixgbevf_get_pf_link_state(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 
 	switch (hw->api_version) {
 	case ixgbe_mbox_api_16:
+	case ixgbe_mbox_api_17:
 		break;
 	default:
 		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
@@ -487,6 +490,47 @@ int ixgbevf_get_pf_link_state(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	} else {
 		*speed = msgbuf[1];
 		*link_up = msgbuf[2];
+	}
+
+	return err;
+}
+
+/**
+ * ixgbevf_negotiate_features_vf - negotiate supported features with PF driver
+ * @hw: pointer to the HW structure
+ * @pf_features - bitmask of features supported by PF
+ *
+ * NOTE: IXGBEVF_SUPPORTED_FEATURES has to be defined for each VF driver
+ * 	 specifically. If none of the features is supported it should be equal
+ * 	 to 0.
+ * 	 Then PF driver resend negotiated  features by doing bitops AND
+ * 	 between IXGBEVF_SUPPORTED_FEATURES & {PF}_SUPPORTED_FEATURES
+ *
+ * Return: IXGBE_ERR_MBX in the case of mailbox error,
+ * IXGBE_ERR_FEATURE_NOT_SUPPORTED if the op is not supported or 0 on success.
+ */
+int ixgbevf_negotiate_features_vf(struct ixgbe_hw *hw, u32 *pf_features)
+{
+	u32 msgbuf[2] = {};
+	int err;
+
+	switch (hw->api_version) {
+	case ixgbe_mbox_api_17:
+		break;
+	default:
+		return IXGBE_ERR_FEATURE_NOT_SUPPORTED;
+	}
+
+	msgbuf[0] = IXGBE_VF_FEATURES_NEGOTIATE;
+	msgbuf[1] = IXGBEVF_SUPPORTED_FEATURES;
+
+	err = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 2);
+
+	if (err || msgbuf[0] & IXGBE_VT_MSGTYPE_FAILURE) {
+		err = IXGBE_ERR_MBX;
+		*pf_features = 0;
+	} else {
+		*pf_features = msgbuf[1];
 	}
 
 	return err;
@@ -706,7 +750,9 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 			goto out;
 	} else {
 		ret_val = ixgbevf_get_pf_link_state(hw, speed, link_up);
-		if (ret_val)
+		if (ret_val == IXGBE_ERR_FEATURE_NOT_SUPPORTED)
+			ixgbe_read_vflinks(hw, speed, link_up);
+		else if (ret_val)
 			goto out;
 	}
 
@@ -809,6 +855,7 @@ int ixgbevf_get_queues(struct ixgbe_hw *hw, unsigned int *num_tcs,
 	case ixgbe_mbox_api_13:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_16:
+	case ixgbe_mbox_api_17:
 		break;
 	default:
 		return 0;

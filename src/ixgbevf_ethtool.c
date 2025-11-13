@@ -2,6 +2,7 @@
 /* Copyright(c) 1999 - 2025 Intel Corporation. */
 
 /* ethtool support for ixgbe */
+#include "ixgbevf.h"
 
 #include <linux/types.h>
 #include <linux/module.h>
@@ -11,8 +12,6 @@
 #include <linux/vmalloc.h>
 #ifdef SIOCETHTOOL
 #include <asm/uaccess.h>
-
-#include "ixgbevf.h"
 
 #ifndef ETH_GSTRING_LEN
 #define ETH_GSTRING_LEN 32
@@ -90,77 +89,177 @@ static const char ixgbevf_priv_flags_strings[][ETH_GSTRING_LEN] = {
 #define IXGBEVF_PRIV_FLAGS_STR_LEN ARRAY_SIZE(ixgbevf_priv_flags_strings)
 #endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+/**
+ * ixgbevf_get_link_ksettings - Retrieve link settings for a network device
+ * @netdev: Pointer to the network device structure
+ * @cmd: Pointer to the ethtool link settings structure to be filled
+ *
+ * This function populates the provided ethtool link settings structure with
+ * the current link settings of the specified network device. It sets the
+ * supported link modes, autonegotiation status, and port type. Additionally,
+ * it determines the current link speed and duplex mode based on the adapter's
+ * link status and speed.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require different methods for setting link modes and
+ * speeds.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_get_link_ksettings(struct net_device *netdev,
 				      struct ethtool_link_ksettings *cmd)
 #else
+/**
+ * ixgbevf_get_settings - Retrieve link settings for a network device
+ * @netdev: Pointer to the network device structure
+ * @ecmd: Pointer to the ethtool command structure to be filled
+ *
+ * This function populates the provided ethtool command structure with the
+ * current link settings of the specified network device. It sets the supported
+ * link modes, autonegotiation status, and transceiver type. Additionally, it
+ * determines the current link speed and duplex mode based on the adapter's
+ * link status and speed.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require different methods for setting link modes and
+ * speeds.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_get_settings(struct net_device *netdev,
 				struct ethtool_cmd *ecmd)
 #endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	__u32 speed = SPEED_UNKNOWN;
 
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 	ethtool_link_ksettings_zero_link_mode(cmd, supported);
-	ethtool_link_ksettings_add_link_mode(cmd, supported,
-					     10000baseT_Full);
-	cmd->base.autoneg = AUTONEG_DISABLE;
-	cmd->base.port = -1;
-#else
-	ecmd->supported = SUPPORTED_10000baseT_Full;
-	ecmd->autoneg = AUTONEG_DISABLE;
-	ecmd->transceiver = XCVR_DUMMY1;
-	ecmd->port = -1;
-#endif
 
 	if (adapter->link_up) {
-		__u32 speed = SPEED_10000;
-
 		switch (adapter->link_speed) {
 		case IXGBE_LINK_SPEED_10GB_FULL:
 			speed = SPEED_10000;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     10000baseT_Full);
 			break;
 		case IXGBE_LINK_SPEED_5GB_FULL:
 			speed = SPEED_5000;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     5000baseT_Full);
 			break;
 #ifdef SUPPORTED_2500baseX_Full
 		case IXGBE_LINK_SPEED_2_5GB_FULL:
 			speed = SPEED_2500;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     2500baseT_Full);
 			break;
 #endif /* SUPPORTED_2500baseX_Full */
 		case IXGBE_LINK_SPEED_1GB_FULL:
 			speed = SPEED_1000;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     1000baseT_Full);
 			break;
 		case IXGBE_LINK_SPEED_100_FULL:
 			speed = SPEED_100;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     100baseT_Full);
 			break;
 		case IXGBE_LINK_SPEED_10_FULL:
 			speed = SPEED_10;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     10baseT_Full);
+			break;
+		default:
 			break;
 		}
-
-#ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 		cmd->base.speed = speed;
 		cmd->base.duplex = DUPLEX_FULL;
 	} else {
 		cmd->base.speed = SPEED_UNKNOWN;
 		cmd->base.duplex = DUPLEX_UNKNOWN;
 	}
+
+	cmd->base.autoneg = AUTONEG_DISABLE;
+	cmd->base.port = -1;
 #else
+	ecmd->supported = 0;
+
+	if (adapter->link_up) {
+		switch (adapter->link_speed) {
+		case IXGBE_LINK_SPEED_10GB_FULL:
+			speed = SPEED_10000;
+			ecmd->supported |= SUPPORTED_10000baseT_Full;
+			break;
+		case IXGBE_LINK_SPEED_5GB_FULL:
+			speed = SPEED_5000;
+			ecmd->supported |= SUPPORTED_5000baseT_Full;
+			break;
+#ifdef SUPPORTED_2500baseX_Full
+		case IXGBE_LINK_SPEED_2_5GB_FULL:
+			speed = SPEED_2500;
+			ecmd->supported |= SUPPORTED_2500baseT_Full;
+			break;
+#endif /* SUPPORTED_2500baseX_Full */
+		case IXGBE_LINK_SPEED_1GB_FULL:
+			speed = SPEED_1000;
+			ecmd->supported |= SUPPORTED_1000baseT_Full;
+			break;
+		case IXGBE_LINK_SPEED_100_FULL:
+			speed = SPEED_100;
+			ecmd->supported |= SUPPORTED_100baseT_Full;
+			break;
+		case IXGBE_LINK_SPEED_10_FULL:
+			speed = SPEED_10;
+			ecmd->supported |= SUPPORTED_10baseT_Full;
+			break;
+		default:
+			break;
+		}
+
 		ethtool_cmd_speed_set(ecmd, speed);
 		ecmd->duplex = DUPLEX_FULL;
 	} else {
 		ethtool_cmd_speed_set(ecmd, SPEED_UNKNOWN);
 		ecmd->duplex = DUPLEX_UNKNOWN;
 	}
+
+	ecmd->autoneg = AUTONEG_DISABLE;
+	ecmd->transceiver = XCVR_DUMMY1;
+	ecmd->port = -1;
 #endif
 
 	return 0;
 }
 
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
+/**
+ * ixgbevf_set_link_ksettings - Attempt to set link settings on the network device
+ * @netdev: Unused pointer to the network device structure
+ * @cmd: Unused pointer to the ethtool link settings structure
+ *
+ * This function is intended to set link settings on the specified network device.
+ * However, the operation is not supported for this driver, and the function
+ * always returns -EOPNOTSUPP. The parameters are marked as `__always_unused`,
+ * indicating that they are not utilized in this function.
+ *
+ * Return: -EINVAL, indicating that the operation is not supported.
+ */
 static int ixgbevf_set_link_ksettings(struct net_device __always_unused *netdev,
 		       const struct ethtool_link_ksettings __always_unused *cmd)
 #else
+/**
+ * ixgbevf_set_settings - Attempt to set ethtool settings on the network device
+ * @netdev: Unused pointer to the network device structure
+ * @ecmd: Unused pointer to the ethtool command structure
+ *
+ * This function is intended to set ethtool settings on the specified network
+ * device. However, the operation is not supported for this driver, and the
+ * function always returns -EOPNOTSUPP. The parameters are marked as
+ * `__always_unused`, indicating that they are not utilized in this function.
+ *
+ * Return: -EINVAL, indicating that the operation is not supported.
+ */
 static int ixgbevf_set_settings(struct net_device __always_unused *netdev,
 				struct ethtool_cmd __always_unused *ecmd)
 #endif
@@ -169,12 +268,38 @@ static int ixgbevf_set_settings(struct net_device __always_unused *netdev,
 }
 
 #ifndef HAVE_NDO_SET_FEATURES
+/**
+ * ixgbevf_get_rx_csum - Retrieve the RX checksum offload setting
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the current setting for receive (RX) checksum offloading
+ * for the specified network device. RX checksum offloading allows the network
+ * device to handle checksum calculations for incoming packets, reducing CPU
+ * load. The function provides the status of this feature, indicating whether
+ * it is enabled or disabled.
+ *
+ * Return: A 32-bit unsigned integer representing the RX checksum offload status.
+ */
 static u32 ixgbevf_get_rx_csum(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	return (adapter->flags & IXGBE_FLAG_RX_CSUM_ENABLED);
 }
 
+/**
+ * ixgbevf_set_rx_csum - Enable or disable RX checksum offloading
+ * @netdev: Pointer to the network device structure
+ * @data: Flag indicating whether to enable (non-zero) or disable (zero) RX checksum offloading
+ *
+ * This function enables or disables receive (RX) checksum offloading for the
+ * specified network device based on the provided @data flag. RX checksum
+ * offloading allows the network device to handle checksum calculations for
+ * incoming packets, reducing CPU load. If the network interface is running,
+ * the function reinitializes the adapter to apply the changes. If the interface
+ * is not running, it performs a reset to ensure the new settings take effect.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_set_rx_csum(struct net_device *netdev, u32 data)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
@@ -194,11 +319,37 @@ static int ixgbevf_set_rx_csum(struct net_device *netdev, u32 data)
 	return 0;
 }
 
+/**
+ * ixgbevf_get_tx_csum - Retrieve the TX checksum offload setting
+ * @netdev: Pointer to the network device structure
+ *
+ * This function checks whether transmit (TX) checksum offloading is enabled
+ * for the specified network device. TX checksum offloading allows the network
+ * device to handle checksum calculations for outgoing packets, reducing CPU
+ * load. The function returns a non-zero value if TX checksum offloading is
+ * enabled, and zero if it is not.
+ *
+ * Return: Non-zero if TX checksum offloading is enabled, zero otherwise.
+ */
 static u32 ixgbevf_get_tx_csum(struct net_device *netdev)
 {
 	return (netdev->features & NETIF_F_IP_CSUM) != 0;
 }
 
+/**
+ * ixgbevf_set_tx_csum - Enable or disable TX checksum offloading
+ * @netdev: Pointer to the network device structure
+ * @data: Flag indicating whether to enable (non-zero) or disable (zero) TX checksum offloading
+ *
+ * This function enables or disables transmit (TX) checksum offloading for the
+ * specified network device based on the provided @data flag. TX checksum
+ * offloading allows the network device to handle checksum calculations for
+ * outgoing packets, reducing CPU load. The function updates the device features
+ * to include or exclude checksum offloading capabilities for both IPv4 and IPv6,
+ * depending on the kernel configuration.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_set_tx_csum(struct net_device *netdev, u32 data)
 {
 	if (data)
@@ -218,6 +369,24 @@ static int ixgbevf_set_tx_csum(struct net_device *netdev, u32 data)
 
 #ifndef HAVE_NDO_SET_FEATURES
 #ifdef NETIF_F_TSO
+/**
+ * ixgbevf_set_tso - Enable or disable TCP Segmentation Offload (TSO)
+ * @netdev: Pointer to the network device structure
+ * @data: Flag indicating whether to enable (non-zero) or disable (zero) TSO
+ *
+ * This function enables or disables TCP Segmentation Offload (TSO) for the
+ * specified network device based on the provided @data flag. TSO allows the
+ * network device to handle the segmentation of large TCP packets, reducing CPU
+ * load. If TSO is disabled, the function stops all transmit queues, updates
+ * the device features to remove TSO capabilities, and then restarts the queues.
+ * The function also handles disabling TSO for VLAN devices if they are present
+ * and VLAN features are not supported by the netdev.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and feature sets.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_set_tso(struct net_device *netdev, u32 data)
 {
 #ifndef HAVE_NETDEV_VLAN_FEATURES
@@ -262,18 +431,53 @@ static int ixgbevf_set_tso(struct net_device *netdev, u32 data)
 #endif /* NETIF_F_TSO */
 #endif
 
+/**
+ * ixgbevf_get_msglevel - Retrieve the message logging level for a network device
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the current message logging level for the specified
+ * network device. The message level determines the verbosity of the logging
+ * output for the device, allowing users to control the amount of information
+ * logged by the driver. This is typically used for debugging and monitoring
+ * purposes.
+ *
+ * Return: The current message logging level as a 32-bit unsigned integer.
+ */
 static u32 ixgbevf_get_msglevel(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	return adapter->msg_enable;
 }
 
+/**
+ * ixgbevf_set_msglevel - Set the message logging level for a network device
+ * @netdev: Pointer to the network device structure
+ * @data: The new message logging level to be set
+ *
+ * This function sets the message logging level for the specified network
+ * device. The message level determines the verbosity of the logging output
+ * for the device, allowing users to control the amount of information logged
+ * by the driver. The new logging level is specified by the @data parameter
+ * and is stored in the adapter's msg_enable field.
+ */
 static void ixgbevf_set_msglevel(struct net_device *netdev, u32 data)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	adapter->msg_enable = data;
 }
 
+/**
+ * ixgbevf_get_regs_len - Get the length of the device registers
+ * @netdev: Unused pointer to the network device structure
+ *
+ * This function returns the length of the device registers for the ixgbevf
+ * driver. The length indicates the size of the register space that can be
+ * accessed for diagnostic or debugging purposes. The @netdev parameter is
+ * marked as `__always_unused`, indicating that it is not utilized in this
+ * function.
+ *
+ * Return: The length of the device registers as an integer.
+ */
 static int ixgbevf_get_regs_len(struct net_device __always_unused *netdev)
 {
 #define IXGBE_REGS_LEN  45
@@ -282,6 +486,17 @@ static int ixgbevf_get_regs_len(struct net_device __always_unused *netdev)
 
 #define IXGBE_GET_STAT(_A_, _R_) _A_->stats._R_
 
+/**
+ * ixgbevf_get_regs - Retrieve device registers for a network device
+ * @netdev: Pointer to the network device structure
+ * @regs: Pointer to the ethtool_regs structure to be filled with register data
+ * @p: Pointer to a buffer where the register data will be stored
+ *
+ * This function populates the provided ethtool_regs structure and buffer with
+ * the current register values of the specified network device. This information
+ * is typically used for diagnostic and debugging purposes, allowing users to
+ * inspect the state of the device's hardware registers.
+ */
 static void ixgbevf_get_regs(struct net_device *netdev, struct ethtool_regs *regs,
                            void *p)
 {
@@ -356,6 +571,19 @@ static void ixgbevf_get_regs(struct net_device *netdev, struct ethtool_regs *reg
 
 }
 
+/**
+ * ixgbevf_get_eeprom - Retrieve EEPROM data from the network device
+ * @netdev: Unused pointer to the network device structure
+ * @eeprom: Unused pointer to the ethtool EEPROM structure
+ * @bytes: Unused pointer to the buffer for storing EEPROM data
+ *
+ * This function is intended to retrieve EEPROM data from the network device.
+ * However, the parameters are marked as `__always_unused`, indicating that
+ * this function does not currently utilize them. This may be a placeholder
+ * or a stub function for future implementation.
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
 static int ixgbevf_get_eeprom(struct net_device __always_unused *netdev,
 			      struct ethtool_eeprom __always_unused *eeprom,
 			      u8 __always_unused *bytes)
@@ -363,6 +591,19 @@ static int ixgbevf_get_eeprom(struct net_device __always_unused *netdev,
 	return -EOPNOTSUPP;
 }
 
+/**
+ * ixgbevf_set_eeprom - Attempt to set EEPROM data on the network device
+ * @netdev: Unused pointer to the network device structure
+ * @eeprom: Unused pointer to the ethtool EEPROM structure
+ * @bytes: Unused pointer to the buffer containing EEPROM data
+ *
+ * This function is intended to set EEPROM data on the specified network device.
+ * However, the operation is not supported for this driver, and the function
+ * always returns -EOPNOTSUPP. The parameters are marked as `__always_unused`,
+ * indicating that they are not utilized in this function.
+ *
+ * Return: -EOPNOTSUPP, indicating that the operation is not supported.
+ */
 static int ixgbevf_set_eeprom(struct net_device __always_unused *netdev,
 			      struct ethtool_eeprom __always_unused *eeprom,
 			      u8 __always_unused *bytes)
@@ -370,6 +611,16 @@ static int ixgbevf_set_eeprom(struct net_device __always_unused *netdev,
 	return -EOPNOTSUPP;
 }
 
+/**
+ * ixgbevf_get_drvinfo - Retrieve driver information for a network device
+ * @netdev: Pointer to the network device structure
+ * @drvinfo: Pointer to the ethtool driver info structure to be filled
+ *
+ * This function populates the provided ethtool driver info structure with
+ * information about the driver and the network device. This typically includes
+ * details such as the driver version, firmware version, and bus information.
+ * The information is used by ethtool to display driver-related data to the user.
+ */
 static void ixgbevf_get_drvinfo(struct net_device *netdev,
 				struct ethtool_drvinfo *drvinfo)
 {
@@ -387,6 +638,19 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 }
 
 #ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+/**
+ * ixgbevf_get_ringparam - Retrieve ring parameters for a network device
+ * @netdev: Pointer to the network device structure
+ * @ring: Pointer to the ethtool_ringparam structure to be filled
+ * @ker: Unused pointer to the kernel ethtool ringparam structure
+ * @extack: Unused pointer to netlink extended ACK structure
+ *
+ * This function populates the provided ethtool_ringparam structure with the
+ * current ring parameters of the specified network device. Ring parameters
+ * include details such as the number of transmit and receive descriptors.
+ * The @ker and @extack parameters are marked as `__always_unused`, indicating
+ * that they are not utilized in this function.
+ */
 static void
 ixgbevf_get_ringparam(struct net_device *netdev,
 		      struct ethtool_ringparam *ring,
@@ -406,6 +670,27 @@ static void ixgbevf_get_ringparam(struct net_device *netdev,
 }
 
 #ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+/**
+ * ixgbevf_set_ringparam - Set ring parameters for a network device
+ * @netdev: Pointer to the network device structure
+ * @ring: Pointer to the ethtool ring parameters structure containing new settings
+ * @ker: Unused pointer to the kernel ethtool ring parameters structure
+ * @extack: Unused pointer to netlink extended ACK structure
+ *
+ * This function configures the ring parameters for the specified network device
+ * based on the settings provided in the ethtool ring parameters structure. It
+ * adjusts the number of descriptors for TX and RX rings, ensuring they are within
+ * acceptable limits and aligned to required multiples. If the new settings differ
+ * from the current configuration, the function reallocates resources and updates
+ * the ring counts. The network interface is brought down and back up to apply
+ * the changes.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require additional parameters for extended acknowledgment.
+ *
+ * Return: 0 on success, -EINVAL if the settings are invalid, or -ENOMEM if memory
+ * allocation fails.
+ */
 static int
 ixgbevf_set_ringparam(struct net_device *netdev,
 		      struct ethtool_ringparam *ring,
@@ -589,6 +874,18 @@ clear_reset:
 	return err;
 }
 
+/**
+ * ixgbevf_get_ethtool_stats - Retrieve ethtool statistics for a network device
+ * @netdev: Pointer to the network device structure
+ * @stats: Unused pointer to the ethtool stats structure
+ * @data: Pointer to an array where the statistics data will be stored
+ *
+ * This function collects and populates the provided data array with statistics
+ * related to the network device. The statistics are typically used for
+ * monitoring and diagnostic purposes. The @stats parameter is marked as
+ * `__always_unused`, indicating that it is not currently utilized in this
+ * function.
+ */
 static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 				      struct ethtool_stats __always_unused *stats,
 				      u64 *data)
@@ -723,6 +1020,27 @@ static void ixgbevf_get_ethtool_stats(struct net_device *netdev,
 	}
 }
 
+/**
+ * ixgbevf_get_strings - Populate string set data for a network device
+ * @netdev: Pointer to the network device structure
+ * @stringset: Identifier for the string set to populate
+ * @data: Pointer to the buffer where the string data will be stored
+ *
+ * This function populates the provided buffer with strings corresponding to
+ * the specified string set for the network device. The string sets are used
+ * by ethtool to provide various types of information about the device. The
+ * function supports the following string sets:
+ *
+ * - ETH_SS_TEST: Populates the buffer with test strings (if not removed by
+ *   compatibility settings).
+ * - ETH_SS_STATS: Populates the buffer with statistics strings, including
+ *   global statistics and per-queue statistics for TX, XDP, and RX queues.
+ * - ETH_SS_PRIV_FLAGS: Populates the buffer with private flag strings (if
+ *   supported by the kernel configuration).
+ *
+ * The function uses conditional compilation to include or exclude certain
+ * string sets based on the build configuration.
+ */
 static void ixgbevf_get_strings(struct net_device *netdev, u32 stringset,
 				u8 *data)
 {
@@ -983,6 +1301,25 @@ static int ixgbevf_reg_test(struct ixgbevf_adapter *adapter, u64 *data)
 }
 
 #ifdef HAVE_ETHTOOL_GET_SSET_COUNT
+/**
+ * ixgbevf_get_sset_count - Get the count of strings in a specified string set
+ * @netdev: Pointer to the network device structure
+ * @stringset: Identifier for the string set to query
+ *
+ * This function returns the number of strings in a specified string set for
+ * the network device. The string sets are used by ethtool to provide various
+ * types of information about the device. The function supports the following
+ * string sets:
+ *
+ * - ETH_SS_TEST: Returns the number of test strings.
+ * - ETH_SS_STATS: Returns the number of statistics strings.
+ * - ETH_SS_PRIV_FLAGS: Returns the number of private flag strings (if supported).
+ *
+ * If the specified string set is not recognized, the function returns -EINVAL.
+ *
+ * Return: The number of strings in the specified string set, or -EINVAL if the
+ * string set is not supported.
+ */
 static int ixgbevf_get_sset_count(struct net_device *netdev, int stringset)
 {
 	switch(stringset) {
@@ -999,17 +1336,50 @@ static int ixgbevf_get_sset_count(struct net_device *netdev, int stringset)
 	}
 }
 #else
+/**
+ * ixgbevf_diag_test_count - Get the number of diagnostic tests available
+ * @netdev: Unused pointer to the network device structure
+ *
+ * This function returns the number of diagnostic tests available for the
+ * ixgbevf driver. The function does not use the @netdev parameter, as it
+ * is marked with the __always_unused attribute, indicating that it is
+ * intentionally unused.
+ *
+ * Return: The number of diagnostic tests available.
+ */
 static int ixgbevf_diag_test_count(struct net_device __always_unused *netdev)
 {
 	return IXGBEVF_TEST_LEN;
 }
 
+/**
+ * ixgbevf_get_stats_count - Get the count of statistics strings
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the number of statistics strings available for the
+ * specified network device. These statistics strings are used by ethtool to
+ * provide detailed information about the device's performance and status.
+ *
+ * Return: The number of statistics strings as defined by IXGBEVF_STATS_LEN.
+ */
 static int ixgbevf_get_stats_count(struct net_device *netdev)
 {
 	return IXGBEVF_STATS_LEN;
 }
 #endif
 
+/**
+ * ixgbevf_diag_test - Perform diagnostic tests on the network device
+ * @netdev: Pointer to the network device structure
+ * @eth_test: Pointer to the ethtool test structure containing test settings
+ * @data: Pointer to an array where test results will be stored
+ *
+ * This function performs a series of diagnostic tests on the specified network
+ * device. The results of these tests are stored in the array pointed to by
+ * @data. The tests are configured based on the settings provided in the
+ * @eth_test structure. This function is typically used to assess the health
+ * and performance of the network device.
+ */
 static void ixgbevf_diag_test(struct net_device *netdev,
 			      struct ethtool_test *eth_test, u64 *data)
 {
@@ -1063,6 +1433,17 @@ static void ixgbevf_diag_test(struct net_device *netdev,
 	msleep_interruptible(4 * 1000);
 }
 
+/**
+ * ixgbevf_nway_reset - Perform a NWay reset on the network device
+ * @netdev: Pointer to the network device structure
+ *
+ * This function performs a NWay reset on the specified network device. A NWay
+ * reset is typically used to restart the autonegotiation process for the
+ * network link. If the network device is currently running, the function
+ * reinitializes the adapter by calling `ixgbevf_reinit_locked`.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_nway_reset(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
@@ -1073,6 +1454,22 @@ static int ixgbevf_nway_reset(struct net_device *netdev)
 	return 0;
 }
 
+/**
+ * ixgbevf_get_coalesce - Retrieve interrupt coalescing settings
+ * @netdev: Pointer to the network device structure
+ * @ec: Pointer to the ethtool coalesce structure to be filled with settings
+ * @kernel_coal: Pointer to the kernel ethtool coalesce structure (optional)
+ * @extack: Pointer to netlink extended ACK structure for error reporting (optional)
+ *
+ * This function retrieves the current interrupt coalescing settings for the
+ * specified network device and fills the provided ethtool coalesce structure
+ * with these settings. The function supports conditional compilation to
+ * accommodate different kernel versions. If the kernel supports extended
+ * acknowledgment, additional parameters for kernel coalesce settings and
+ * netlink extended ACK are included.
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
 static int ixgbevf_get_coalesce(struct net_device *netdev,
 #ifdef HAVE_ETHTOOL_COALESCE_EXTACK
 				struct ethtool_coalesce *ec,
@@ -1103,6 +1500,24 @@ static int ixgbevf_get_coalesce(struct net_device *netdev,
 	return 0;
 }
 
+/**
+ * ixgbevf_set_coalesce - Set interrupt coalescing parameters for a network device
+ * @netdev: Pointer to the network device structure
+ * @ec: Pointer to the ethtool coalesce structure containing new settings
+ * @kernel_coal: Pointer to the kernel ethtool coalesce structure (optional)
+ * @extack: Pointer to netlink extended ACK structure for error reporting (optional)
+ *
+ * This function configures the interrupt coalescing parameters for the specified
+ * network device based on the settings provided in the ethtool coalesce structure.
+ * It adjusts the RX and TX interrupt throttling rates (ITR) for each queue vector
+ * in the adapter. The function ensures that the coalescing settings are within
+ * acceptable limits and applies the changes to the hardware.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require additional parameters for extended acknowledgment.
+ *
+ * Return: 0 on success, -EINVAL if the settings are invalid.
+ */
 static int ixgbevf_set_coalesce(struct net_device *netdev,
 #ifdef HAVE_ETHTOOL_COALESCE_EXTACK
 				struct ethtool_coalesce *ec,
@@ -1314,6 +1729,19 @@ static int ixgbevf_get_rss_hash_opts(struct ixgbevf_adapter *adapter,
 	return 0;
 }
 
+/**
+ * ixgbevf_set_rxnfc - Set RX network flow classification options
+ * @dev: Pointer to the network device structure
+ * @cmd: Pointer to the ethtool RX network flow classification command structure
+ *
+ * This function sets the receive (RX) network flow classification options for
+ * the specified network device based on the provided ethtool command. It
+ * currently supports setting the RSS (Receive Side Scaling) hash options when
+ * the command is ETHTOOL_SRXFH. If the command is not supported, the function
+ * returns -EOPNOTSUPP.
+ *
+ * Return: 0 on success, -EOPNOTSUPP if the command is not supported.
+ */
 static int ixgbevf_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(dev);
@@ -1325,6 +1753,27 @@ static int ixgbevf_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	return ret;
 }
 
+/**
+ * ixgbevf_get_rxnfc - Retrieve RX network flow classification settings
+ * @dev: Pointer to the network device structure
+ * @info: Pointer to the ethtool RX network flow classification structure
+ * @rule_locs: Unused pointer to rule locations (type depends on kernel version)
+ *
+ * This function retrieves various RX network flow classification settings for
+ * the specified network device. It supports different commands to provide
+ * specific information:
+ *
+ * - ETHTOOL_GRXRINGS: Fills the @info structure with the number of RX rings
+ *   (queues) available on the device.
+ * - ETHTOOL_GRXFH: Retrieves the RSS (Receive Side Scaling) hash options and
+ *   fills the @info structure with these settings.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require different types for the rule locations parameter.
+ *
+ * Return: 0 on success, -EOPNOTSUPP if the command is not supported, or a
+ * negative error code on failure.
+ */
 static int ixgbevf_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
 #ifdef HAVE_ETHTOOL_GET_RXNFC_VOID_RULE_LOCS
 			     __always_unused void *rule_locs)
@@ -1384,6 +1833,7 @@ static int ixgbevf_get_reta_locked(struct ixgbe_hw *hw, u32 *reta,
 	 * is not supported for this device type.
 	 */
 	switch (hw->api_version) {
+	case ixgbe_mbox_api_17:
 	case ixgbe_mbox_api_16:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_13:
@@ -1453,6 +1903,7 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	 * or if the operation is not supported for this device type.
 	 */
 	switch (hw->api_version) {
+	case ixgbe_mbox_api_17:
 	case ixgbe_mbox_api_16:
 	case ixgbe_mbox_api_15:
 	case ixgbe_mbox_api_13:
@@ -1493,6 +1944,18 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	return 0;
 }
 
+/**
+ * ixgbevf_get_rxfh_indir_size - Get the size of the RX flow hash indirection table
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the size of the receive (RX) flow hash indirection
+ * table for the specified network device. The indirection table is used in
+ * the process of distributing incoming packets across multiple receive queues
+ * based on their hash values. Knowing the size of this table is important for
+ * configuring and managing the distribution of network traffic.
+ *
+ * Return: The size of the RX flow hash indirection table as a 32-bit unsigned integer.
+ */
 static u32 ixgbevf_get_rxfh_indir_size(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
@@ -1503,11 +1966,39 @@ static u32 ixgbevf_get_rxfh_indir_size(struct net_device *netdev)
 	return IXGBEVF_82599_RETA_SIZE;
 }
 
+/**
+ * ixgbevf_get_rxfh_key_size - Get the size of the RX flow hash key
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the size of the receive (RX) flow hash key for the
+ * specified network device. The hash key is used in conjunction with the
+ * indirection table to determine how incoming packets are distributed across
+ * multiple receive queues. Knowing the size of the hash key is important for
+ * configuring and managing the distribution of network traffic.
+ *
+ * Return: The size of the RX flow hash key as a 32-bit unsigned integer.
+ */
 static u32 ixgbevf_get_rxfh_key_size(struct net_device *netdev)
 {
 	return IXGBEVF_RSS_HASH_KEY_SIZE;
 }
 
+/**
+ * ixgbevf_get_rxfh - Retrieve RX flow hash configuration
+ * @netdev: Pointer to the network device structure
+ * @rxfh: Pointer to the ethtool RX flow hash parameter structure (optional)
+ * @indir: Pointer to the indirection table (optional)
+ * @key: Pointer to the hash key (optional)
+ * @hfunc: Pointer to the hash function (optional)
+ *
+ * This function retrieves the current RX flow hash configuration for the
+ * specified network device. The configuration includes the indirection table,
+ * hash key, and hash function used for distributing incoming packets across
+ * multiple receive queues. The function supports conditional compilation to
+ * accommodate different kernel versions, which may require different parameters.
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
 #ifdef HAVE_RXFH_HASHFUNC
 #ifdef HAVE_ETHTOOL_RXFH_PARAM
 static int ixgbevf_get_rxfh(struct net_device *netdev,
@@ -1570,6 +2061,17 @@ static int ixgbevf_get_rxfh(struct net_device *netdev, u32 *indir, u8 *key)
 
 #endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 #if defined(HAVE_ETHTOOL_GET_SSET_COUNT) && defined(HAVE_SWIOTLB_SKIP_CPU_SYNC)
+/**
+ * ixgbevf_get_priv_flags - Retrieve private flags for a network device
+ * @netdev: Pointer to the network device structure
+ *
+ * This function returns the current private flags for the specified network
+ * device. Private flags are driver-specific settings that can be used to
+ * control various aspects of the device's behavior. These flags are typically
+ * used for advanced configuration and debugging purposes.
+ *
+ * Return: The current private flags as a 32-bit unsigned integer.
+ */
 static u32 ixgbevf_get_priv_flags(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
@@ -1581,6 +2083,20 @@ static u32 ixgbevf_get_priv_flags(struct net_device *netdev)
 	return priv_flags;
 }
 
+/**
+ * ixgbevf_set_priv_flags - Set private flags for a network device
+ * @netdev: Pointer to the network device structure
+ * @priv_flags: The new private flags to be set
+ *
+ * This function sets the private flags for the specified network device. Private
+ * flags are driver-specific settings that can be used to control various aspects
+ * of the device's behavior. The function updates the adapter's flags based on
+ * the provided @priv_flags, specifically handling the IXGBEVF_FLAGS_LEGACY_RX
+ * flag. If the flags are changed, the network interface is reset to repopulate
+ * the queues, provided the interface is currently running.
+ *
+ * Return: 0 on success.
+ */
 static int ixgbevf_set_priv_flags(struct net_device *netdev, u32 priv_flags)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
