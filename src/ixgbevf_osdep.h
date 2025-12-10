@@ -8,12 +8,13 @@
 #ifndef _IXGBEVF_OSDEP_H_
 #define _IXGBEVF_OSDEP_H_
 
+#include "kcompat.h"
+
 #include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/if_ether.h>
 #include <linux/sched.h>
-#include "kcompat.h"
 
 
 #ifdef DBG
