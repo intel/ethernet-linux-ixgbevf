@@ -844,10 +844,8 @@ struct ixgbe_aci_cmd_get_phy_caps_data {
 #define IXGBE_ACI_PHY_EEE_EN_100BASE_TX			BIT(0)
 #define IXGBE_ACI_PHY_EEE_EN_1000BASE_T			BIT(1)
 #define IXGBE_ACI_PHY_EEE_EN_10GBASE_T			BIT(2)
-#define IXGBE_ACI_PHY_EEE_EN_1000BASE_KX		BIT(3)
-#define IXGBE_ACI_PHY_EEE_EN_10GBASE_KR			BIT(4)
-#define IXGBE_ACI_PHY_EEE_EN_25GBASE_KR			BIT(5)
-#define IXGBE_ACI_PHY_EEE_EN_10BASE_T			BIT(11)
+#define IXGBE_ACI_PHY_EEE_EN_5GBASE_T			BIT(12)
+#define IXGBE_ACI_PHY_EEE_EN_2_5GBASE_T			BIT(13)
 	__le16 eeer_value;
 	u8 phy_id_oui[4]; /* PHY/Module ID connected on the port */
 	u8 phy_fw_ver[8];
@@ -877,7 +875,9 @@ struct ixgbe_aci_cmd_get_phy_caps_data {
 #define IXGBE_ACI_MOD_TYPE_BYTE2_SFP_PLUS		0xA0
 #define IXGBE_ACI_MOD_TYPE_BYTE2_QSFP_PLUS		0x86
 	u8 qualified_module_count;
-	u8 rsvd2[7];	/* Bytes 47:41 reserved */
+	u8 rsvd2;
+	__le16 eee_entry_delay;
+	u8 rsvd3[4];
 #define IXGBE_ACI_QUAL_MOD_COUNT_MAX			16
 	struct {
 		u8 v_oui[3];
@@ -901,6 +901,7 @@ struct ixgbe_aci_cmd_set_phy_cfg {
 
 IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_set_phy_cfg);
 
+#pragma pack(1)
 /* Set PHY config command data structure */
 struct ixgbe_aci_cmd_set_phy_cfg_data {
 	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
@@ -919,9 +920,10 @@ struct ixgbe_aci_cmd_set_phy_cfg_data {
 	__le16 eeer_value; /* Use defines from ixgbe_aci_get_phy_caps */
 	u8 link_fec_opt; /* Use defines from ixgbe_aci_get_phy_caps */
 	u8 module_compliance_enforcement;
+	__le16  eee_entry_delay;
 };
 
-IXGBE_CHECK_STRUCT_LEN(24, ixgbe_aci_cmd_set_phy_cfg_data);
+IXGBE_CHECK_STRUCT_LEN(26, ixgbe_aci_cmd_set_phy_cfg_data);
 
 /* Restart AN command data structure (direct 0x0605)
  * Also used for response, with only the lport_num field present.
@@ -936,7 +938,6 @@ struct ixgbe_aci_cmd_restart_an {
 
 IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_restart_an);
 
-#pragma pack(1)
 /* Get link status (indirect 0x0607), also used for Link Status Event */
 struct ixgbe_aci_cmd_get_link_status {
 	u8 reserved[2];
@@ -1043,8 +1044,9 @@ struct ixgbe_aci_cmd_get_link_status_data {
 #define IXGBE_ACI_LINK_SPEED_200GB		BIT(11)
 #define IXGBE_ACI_LINK_SPEED_UNKNOWN		BIT(15)
 	__le16 reserved3; /* Aligns next field to 8-byte boundary */
-	u8 ext_fec_status;
-#define IXGBE_ACI_LINK_RS_272_FEC_EN	BIT(0) /* RS 272 FEC enabled */
+	u8 eee_status;
+#define IXGBE_ACI_LINK_EEE_ENABLED		BIT(2)
+#define IXGBE_ACI_LINK_EEE_ACTIVE		BIT(3)
 	u8 reserved4;
 	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
 	__le64 phy_type_high; /* Use values from IXGBE_PHY_TYPE_HIGH_* */
@@ -2222,6 +2224,7 @@ struct ixgbe_link_status {
 	 * ixgbe_aci_get_phy_caps structure
 	 */
 	u8 module_type[IXGBE_ACI_MODULE_TYPE_TOTAL_BYTE];
+	u8 eee_status;
 };
 
 /* Common HW capabilities for SW use */
@@ -2525,7 +2528,7 @@ struct ixgbe_flash_info {
 	struct ixgbe_nvm_info nvm;		/* NVM version information */
 	struct ixgbe_netlist_info netlist;	/* Netlist version info */
 	struct ixgbe_bank_info banks;		/* Flash Bank information */
-	u16 sr_words;				/* Shadow RAM size in words */
+	u32 sr_words;				/* Shadow RAM size in words */
 	u32 flash_size;				/* Size of available flash in bytes */
 	u8 blank_nvm_mode;			/* is NVM empty (no FW present) */
 };
@@ -2558,4 +2561,13 @@ struct ixgbe_nvm_access_data {
 #define PROXY_STS_TS_INT	BIT(31)
 
 #endif /* !NO_PTP_SUPPORT */
+
+/**
+ * ixgbe_is_mac_E6xx - check if MAC belongs to E600 series
+ * @mac_type: MAC type to be tested
+ *
+ * Return: true if mac_type belongs to E600 series, false otherwise.
+ */
+#define ixgbe_is_mac_E6xx(mac_type) ((mac_type) == ixgbe_mac_E610)
+
 #endif /* _IXGBE_TYPE_E610_H_ */

@@ -4,6 +4,8 @@
 /******************************************************************************
  Copyright (c)2006 - 2007 Myricom, Inc. for some LRO specific code
 ******************************************************************************/
+#include "ixgbevf.h"
+
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/pci.h>
@@ -29,8 +31,6 @@
 #include <linux/if_vlan.h>
 #endif
 
-#include "ixgbevf.h"
-
 #ifdef HAVE_XDP_SUPPORT
 #include <linux/bpf.h>
 #include <linux/bpf_trace.h>
@@ -39,7 +39,7 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(5.1.7) RELEASE_TAG
+#define DRV_VERSION __stringify(5.2.2) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -237,17 +237,20 @@ static u64 ixgbevf_get_tx_completed(struct ixgbevf_ring *ring)
 
 #if IS_ENABLED(CONFIG_PCI_HYPERV)
 /**
- * ixgbevf_hv_set_rar_vf - set device MAC address Hyper-V variant
- * @hw: pointer to hardware structure
- * @index: Receive address register to write
- * @addr: Address to put into receive address register
+ * ixgbevf_hv_set_rar_vf - Set the device MAC address for a VF in Hyper-V
+ * @hw: Pointer to the hardware structure
+ * @index: Index of the receive address register to write
+ * @addr: MAC address to set in the receive address register
  * @vmdq: Unused in this implementation
  * @enable_addr: Unused in this implementation
  *
- * We don't really allow setting the device MAC address. However,
- * if the address being set is the permanent MAC address we will
- * permit that.
- **/
+ * This function attempts to set the device MAC address for a virtual function
+ * (VF) in a Hyper-V environment. The function does not generally allow setting
+ * the MAC address, but it permits setting the address if it matches the
+ * permanent MAC address of the device.
+ *
+ * Return: 0 if the address matches the permanent MAC address, -EOPNOTSUPP otherwise.
+ */
 s32 ixgbevf_hv_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr,
 			  u32 vmdq, u32 enable_addr)
 {
@@ -337,10 +340,16 @@ static void ixgbevf_tx_timeout_reset(struct ixgbevf_adapter *adapter)
 }
 
 /**
- * ixgbevf_tx_timeout - Respond to a Tx Hang
- * @netdev: network interface device structure
- * @txqueue: specific tx queue
- **/
+ * ixgbevf_tx_timeout - Handle a transmit timeout (Tx hang) event
+ * @netdev: Pointer to the network interface device structure
+ * @txqueue: Specific transmit queue that experienced the timeout (conditionally compiled)
+ *
+ * This function is called in response to a transmit timeout event, commonly
+ * referred to as a Tx hang. It initiates a reset of the adapter to recover
+ * from the timeout condition. The function supports conditional compilation
+ * to accommodate different kernel versions, which may provide the specific
+ * transmit queue that experienced the timeout.
+ */
 #ifdef HAVE_TX_TIMEOUT_TXQUEUE
 static void ixgbevf_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 #else
@@ -352,13 +361,17 @@ static void ixgbevf_tx_timeout(struct net_device *netdev)
 	ixgbevf_tx_timeout_reset(adapter);
 }
 
-
 /**
- * ixgbevf_clean_tx_irq - Reclaim resources after transmit completes
- * @q_vector: board private structure
- * @tx_ring: tx ring to clean
- * @napi_budget: Used to determine if we are in netpoll
- **/
+ * ixgbevf_tx_timeout - Handle a transmit timeout (Tx hang) event
+ * @netdev: Pointer to the network interface device structure
+ * @txqueue: Specific transmit queue that experienced the timeout (conditionally compiled)
+ *
+ * This function is called in response to a transmit timeout event, commonly
+ * referred to as a Tx hang. It initiates a reset of the adapter to recover
+ * from the timeout condition. The function supports conditional compilation
+ * to accommodate different kernel versions, which may provide the specific
+ * transmit queue that experienced the timeout.
+ */
 static bool ixgbevf_clean_tx_irq(struct ixgbevf_q_vector *q_vector,
 				 struct ixgbevf_ring *tx_ring, int napi_budget)
 {
@@ -549,10 +562,21 @@ static void ixgbevf_rx_vlan(struct ixgbevf_ring *rx_ring,
 }
 
 /**
- * ixgbevf_receive_skb - Send a completed packet up the stack
- * @q_vector: structure containing interrupt and ring information
- * @skb: packet to send up
- **/
+ * ixgbevf_receive_skb - Deliver a completed packet to the network stack
+ * @q_vector: Pointer to the structure containing interrupt and ring information
+ * @skb: Pointer to the socket buffer (sk_buff) containing the packet to deliver
+ *
+ * This function sends a completed packet up the network stack. It checks for
+ * VLAN tagging and uses the appropriate method to deliver the packet based on
+ * whether VLAN acceleration is enabled. If the packet is VLAN-tagged and a
+ * VLAN group is present, it uses VLAN-specific receive functions. Otherwise,
+ * it uses standard receive functions. The function also considers whether
+ * netpoll is active to choose between regular and GRO (Generic Receive Offload)
+ * receive functions.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and configurations, including VLAN support.
+ */
 static void ixgbevf_receive_skb(struct ixgbevf_q_vector *q_vector,
 				struct sk_buff *skb)
 {
@@ -581,10 +605,25 @@ static void ixgbevf_receive_skb(struct ixgbevf_q_vector *q_vector,
 #endif /* HAVE_VLAN_RX_REGISTER */
 
 /**
- * ixgbevf_rx_skb - Helper function to determine proper Rx method
- * @q_vector: structure containing interrupt and ring information
- * @skb: packet to send up
- **/
+ * ixgbevf_rx_skb - Determine the appropriate method to process a received packet
+ * @q_vector: Pointer to the structure containing interrupt and ring information
+ * @skb: Pointer to the socket buffer (sk_buff) containing the packet to process
+ *
+ * This helper function determines the appropriate method to process a received
+ * packet and send it up the network stack. It considers various factors such as
+ * busy polling, netpoll, and VLAN registration to choose the correct processing
+ * path:
+ *
+ * - If busy polling is enabled or netpoll is active, it uses `netif_receive_skb`
+ *   to process the packet and exits early if busy polling was used.
+ * - If VLAN RX registration is supported, it delegates packet processing to
+ *   `ixgbevf_receive_skb`.
+ * - Otherwise, it uses `napi_gro_receive` or `netif_rx` based on the netpoll
+ *   status to process the packet.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and configurations, including busy polling and VLAN support.
+ */
 static void ixgbevf_rx_skb(struct ixgbevf_q_vector *q_vector,
 			   struct sk_buff *skb)
 {
@@ -780,15 +819,19 @@ static void ixgbevf_put_rx_buffer(struct ixgbevf_ring *rx_ring,
 }
 
 /**
- * ixgbevf_is_non_eop - process handling of non-EOP buffers
- * @rx_ring: Rx ring being processed
- * @rx_desc: Rx descriptor for current buffer
+ * ixgbevf_is_non_eop - Determine if a buffer is a non-EOP (End of Packet) buffer
+ * @rx_ring: Pointer to the Rx ring being processed
+ * @rx_desc: Pointer to the Rx descriptor for the current buffer
  *
- * This function updates next to clean.  If the buffer is an EOP buffer
- * this function exits returning false, otherwise it will place the
- * sk_buff in the next buffer to be chained and return true indicating
- * that this is in fact a non-EOP buffer.
- **/
+ * This function checks whether the current buffer in the receive (Rx) ring is
+ * a non-End of Packet (non-EOP) buffer. It updates the `next_to_clean` index
+ * to point to the next descriptor in the ring. If the buffer is an EOP buffer,
+ * the function returns false, indicating that the packet is complete. If the
+ * buffer is a non-EOP buffer, the function returns true, indicating that the
+ * packet is not yet complete and additional buffers are expected.
+ *
+ * Return: true if the buffer is a non-EOP buffer, false if it is an EOP buffer.
+ */
 static bool ixgbevf_is_non_eop(struct ixgbevf_ring *rx_ring,
 			       union ixgbe_adv_rx_desc *rx_desc)
 {
@@ -864,10 +907,25 @@ static bool ixgbevf_alloc_mapped_page(struct ixgbevf_ring *rx_ring,
 }
 
 /**
- * ixgbevf_alloc_rx_buffers - Replace used receive buffers; packet split
- * @rx_ring: rx descriptor ring (for a specific queue) to setup buffers on
- * @cleaned_count: number of buffers to replace
- **/
+ * ixgbevf_alloc_rx_buffers - Replace used receive buffers in the descriptor ring
+ * @rx_ring: Pointer to the rx descriptor ring for a specific queue
+ * @cleaned_count: Number of buffers to replace
+ *
+ * This function is responsible for replenishing the receive buffers in the
+ * specified receive descriptor ring. It replaces the buffers that have been
+ * processed and are now free to be reused for receiving new packets. The
+ * function ensures that the receive ring has enough buffers available to
+ * handle incoming network traffic efficiently, thereby preventing packet loss
+ * and maintaining optimal network performance.
+ *
+ * The function iterates over the receive descriptors in the ring, allocates
+ * new buffers as needed, and updates the descriptors to point to these new
+ * buffers. This is crucial for the continuous operation of the network
+ * interface, especially in high-throughput environments.
+ *
+ * This function is typically called after processing received packets to
+ * prepare the ring for future packet reception.
+ */
 static void ixgbevf_alloc_rx_buffers(struct ixgbevf_ring *rx_ring,
 				     u16 cleaned_count)
 {
@@ -1541,13 +1599,29 @@ static int ixgbevf_clean_rx_irq(struct ixgbevf_q_vector *q_vector,
 }
 
 /**
- * ixgbevf_poll - NAPI polling calback
- * @napi: napi struct with our devices info in it
- * @budget: amount of work driver is allowed to do this pass, in packets
+ * ixgbevf_poll - NAPI polling callback
+ * @napi: NAPI struct containing device-specific information
+ * @budget: Maximum number of packets the driver is allowed to process in this pass
  *
- * This function will clean more than one or more rings associated with a
- * q_vector.
- **/
+ * This function is invoked as part of the NAPI polling mechanism to process
+ * packets in the TX and RX rings associated with a `q_vector`. The function
+ * attempts to clean the TX rings first, followed by the RX rings, distributing
+ * the available budget fairly among the RX rings.
+ *
+ * The function iterates over each TX ring and calls `ixgbevf_clean_tx_irq` to
+ * process completed transmissions. It then calculates a per-ring budget for
+ * the RX rings and calls `ixgbevf_clean_rx_irq` to process received packets.
+ *
+ * If all work is completed within the given budget, the function exits polling
+ * mode by calling `napi_complete_done`. If not, it returns the budget to
+ * continue polling.
+ *
+ * The function also handles various conditions such as checking if the network
+ * interface is running, managing NAPI state, and enabling interrupts if
+ * necessary.
+ *
+ * Return: The number of packets processed, or the budget if more work remains.
+ */
 static int ixgbevf_poll(struct napi_struct *napi, int budget)
 {
 	struct ixgbevf_q_vector *q_vector =
@@ -1632,7 +1706,24 @@ void ixgbevf_write_eitr(struct ixgbevf_q_vector *q_vector)
 }
 
 #ifdef HAVE_NDO_BUSY_POLL
-/* must be called with local_bh_disable()d */
+/**
+ * ixgbevf_busy_poll_recv - Perform busy polling on a receive queue
+ * @napi: Pointer to the NAPI structure associated with the polling
+ *
+ * This function performs busy polling on a receive queue for the specified
+ * NAPI context. Busy polling is a technique used to reduce latency by actively
+ * polling the receive queue for packets, rather than waiting for an interrupt.
+ * The function checks if the adapter is down and returns an appropriate status
+ * if so. It locks the queue vector for polling, iterates over each receive ring
+ * in the queue vector, and attempts to clean the receive IRQ. If packets are
+ * found, the function updates the statistics and breaks out of the loop.
+ * Finally, it unlocks the queue vector and returns the number of packets found.
+ *
+ * Note: This function must be called with local bottom halves disabled.
+ *
+ * Return: The number of packets found, LL_FLUSH_FAILED if the adapter is down,
+ * or LL_FLUSH_BUSY if the queue vector is busy.
+ */
 static int ixgbevf_busy_poll_recv(struct napi_struct *napi)
 {
 	struct ixgbevf_q_vector *q_vector =
@@ -1697,12 +1788,25 @@ static void ixgbevf_set_ivar(struct ixgbevf_adapter *adapter, s8 direction,
 }
 
 /**
- * ixgbevf_configure_msix - Configure MSI-X hardware
- * @adapter: board private structure
+ * ixgbevf_configure_msix - Configure MSI-X hardware for the adapter
+ * @adapter: Pointer to the board private structure representing the adapter
  *
- * ixgbevf_configure_msix sets up the hardware to properly generate MSI-X
- * interrupts.
- **/
+ * This function configures the MSI-X (Message Signaled Interrupts - eXtended)
+ * hardware for the specified network adapter. It sets up the Interrupt Vector
+ * Allocation Register (IVAR) table and configures the Interrupt Throttle Rate
+ * (ITR) values for each queue vector associated with the adapter.
+ *
+ * The function iterates over each queue vector, setting the IVAR entries for
+ * both receive (RX) and transmit (TX) rings. It also determines the appropriate
+ * ITR value based on whether the vector is TX-only or includes RX, and updates
+ * the global `eims_enable_mask` to enable the corresponding MSI-X interrupts.
+ *
+ * Additionally, the function configures the `eims_other` value for handling
+ * other interrupts and updates the `eims_enable_mask` accordingly.
+ *
+ * This setup is crucial for ensuring efficient interrupt handling and optimal
+ * performance of the network adapter.
+ */
 static void ixgbevf_configure_msix(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbevf_q_vector *q_vector;
@@ -2406,6 +2510,20 @@ static void ixgbevf_configure_rx(struct ixgbevf_adapter *adapter)
 }
 
 #ifdef HAVE_VLAN_RX_REGISTER
+/**
+ * ixgbevf_vlan_rx_register - Register a VLAN group with the network device
+ * @netdev: Pointer to the network device structure
+ * @grp: Pointer to the VLAN group to be registered
+ *
+ * This function registers a VLAN group with the specified network device,
+ * allowing the device to handle packets tagged with VLAN IDs associated with
+ * the group. It updates the adapter's VLAN group pointer and configures each
+ * receive queue to enable VLAN tag stripping by setting the VME (VLAN Mode
+ * Enable) bit in the receive descriptor control register.
+ *
+ * The function is conditionally compiled to be included only if
+ * HAVE_VLAN_RX_REGISTER is defined, indicating support for VLAN RX registration.
+ */
 static void ixgbevf_vlan_rx_register(struct net_device *netdev,
 				     struct vlan_group *grp)
 {
@@ -2426,6 +2544,27 @@ static void ixgbevf_vlan_rx_register(struct net_device *netdev,
 #endif /* HAVE_VLAN_RX_REGISTER */
 
 #if defined(NETIF_F_HW_VLAN_TX) || defined(NETIF_F_HW_VLAN_CTAG_TX)
+/**
+ * ixgbevf_vlan_rx_add_vid - Add a VLAN ID to the receive filter
+ * @netdev: Pointer to the network device structure
+ * @proto: Unused protocol identifier (conditionally compiled)
+ * @vid: VLAN ID to be added to the filter
+ *
+ * This function adds a specified VLAN ID (VID) to the receive filter of the
+ * network device, allowing the device to handle packets tagged with this VLAN.
+ * It interacts with the hardware to update the VLAN filter table. If the
+ * operation fails, an error message is logged. The function also updates the
+ * VLAN device's feature flags to match those of the main network device, if
+ * VLAN features are not supported by the netdev. Additionally, it marks the
+ * VLAN as active in the adapter's VLAN bitmap if applicable.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and feature sets, including variations in function signature and
+ * return type.
+ *
+ * Return: 0 on success, or a negative error code if setting the VLAN filter
+ * fails (conditionally compiled).
+ */
 #ifdef HAVE_INT_NDO_VLAN_RX_ADD_VID
 #ifdef NETIF_F_HW_VLAN_CTAG_TX
 static int ixgbevf_vlan_rx_add_vid(struct net_device *netdev,
@@ -2481,6 +2620,26 @@ static void ixgbevf_vlan_rx_add_vid(struct net_device *netdev, u16 vid)
 #endif
 }
 
+/**
+ * ixgbevf_vlan_rx_kill_vid - Remove a VLAN ID from the receive filter
+ * @netdev: Pointer to the network device structure
+ * @proto: Unused protocol identifier (conditionally compiled)
+ * @vid: VLAN ID to be removed from the filter
+ *
+ * This function removes a specified VLAN ID (VID) from the receive filter of
+ * the network device, preventing the device from handling packets tagged with
+ * this VLAN. It interacts with the hardware to update the VLAN filter table.
+ * If VLAN features are not supported by the netdev, the function also updates
+ * the VLAN group to detach the VLAN device and manages interrupts accordingly.
+ * Additionally, it clears the VLAN from the adapter's active VLAN bitmap if
+ * applicable.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and feature sets, including variations in function signature and
+ * return type.
+ *
+ * Return: 0 on success (conditionally compiled).
+ */
 #ifdef HAVE_INT_NDO_VLAN_RX_ADD_VID
 #ifdef NETIF_F_HW_VLAN_CTAG_RX
 static int ixgbevf_vlan_rx_kill_vid(struct net_device *netdev,
@@ -2785,10 +2944,35 @@ static void ixgbevf_init_last_counter_stats(struct ixgbevf_adapter *adapter)
 	adapter->stats.base_vfmprc = adapter->stats.last_vfmprc;
 }
 
+/**
+ * ixgbevf_set_features - Set features supported by PF
+ * @adapter: pointer to the adapter struct
+ *
+ * Negotiate with PF supported features and then set pf_features accordingly.
+ */
+static void ixgbevf_set_features(struct ixgbevf_adapter *adapter)
+{
+	u32 *pf_features = &adapter->pf_features;
+	struct ixgbe_hw *hw = &adapter->hw;
+	int err;
+
+	err = hw->mac.ops.negotiate_features(hw, pf_features);
+	if (err && err != -EOPNOTSUPP)
+		netdev_dbg(adapter->netdev,
+			   "PF feature negotiation failed.\n");
+
+	/* Address also pre API 1.7 cases */
+	if (hw->api_version == ixgbe_mbox_api_14)
+		*pf_features |= IXGBEVF_PF_SUP_IPSEC;
+	else if (hw->api_version == ixgbe_mbox_api_15)
+		*pf_features |= IXGBEVF_PF_SUP_ESX_MBX;
+}
+
 static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-	int api[] = { ixgbe_mbox_api_16,
+	int api[] = { ixgbe_mbox_api_17,
+		      ixgbe_mbox_api_16,
 		      ixgbe_mbox_api_15,
 		      ixgbe_mbox_api_13,
 		      ixgbe_mbox_api_12,
@@ -2806,7 +2990,9 @@ static void ixgbevf_negotiate_api(struct ixgbevf_adapter *adapter)
 		idx++;
 	}
 
-	if (hw->api_version == ixgbe_mbox_api_15)
+	ixgbevf_set_features(adapter);
+
+	if (adapter->pf_features & IXGBEVF_PF_SUP_ESX_MBX)
 		ixgbe_upgrade_mbx_params_vf(hw);
 
 	spin_unlock_bh(&adapter->mbx_lock);
@@ -3090,7 +3276,8 @@ void ixgbevf_reset(struct ixgbevf_adapter *adapter)
 	struct ixgbe_hw *hw = &adapter->hw;
 	struct net_device *netdev = adapter->netdev;
 
-	if (IXGBE_REMOVED(hw->hw_addr))
+	if (IXGBE_REMOVED(hw->hw_addr) ||
+	    test_bit(__IXGBEVF_REMOVING, &adapter->state))
 		return;
 	if (hw->mac.ops.reset_hw(hw)) {
 		DPRINTK(PROBE, ERR, "PF still resetting\n");
@@ -3186,6 +3373,7 @@ static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 		case ixgbe_mbox_api_13:
 		case ixgbe_mbox_api_15:
 		case ixgbe_mbox_api_16:
+		case ixgbe_mbox_api_17:
 			if (adapter->xdp_prog &&
 			    hw->mac.max_tx_queues == rss)
 				rss = 1;
@@ -3778,8 +3966,8 @@ void ixgbevf_update_stats(struct ixgbevf_adapter *adapter)
  **/
 static void ixgbevf_service_timer(struct timer_list *t)
 {
-	struct ixgbevf_adapter *adapter = from_timer(adapter, t,
-						     service_timer);
+	struct ixgbevf_adapter *adapter = timer_container_of(adapter, t,
+							     service_timer);
 
 	/* Reset the timer */
 	mod_timer(&adapter->service_timer, (HZ * 2) + jiffies);
@@ -4778,6 +4966,28 @@ dma_error:
 	tx_ring->next_to_use = i;
 }
 
+/**
+ * ixgbevf_xmit_frame_ring - Transmit a frame on a specific TX ring
+ * @skb: Pointer to the socket buffer (sk_buff) containing the packet
+ * @tx_ring: Pointer to the TX ring structure where the packet will be transmitted
+ *
+ * This function handles the transmission of a network frame on a specified TX
+ * ring. It performs several checks and operations to prepare the packet for
+ * transmission:
+ *
+ * - Drops LLDP frames, as VFs do not forward them.
+ * - Calculates the number of descriptors needed for the packet and its fragments.
+ * - Checks if there are enough descriptors available in the ring; if not, it
+ *   returns NETDEV_TX_BUSY to indicate the ring is full.
+ * - Records the initial descriptor location and packet metadata.
+ * - Handles VLAN tagging, including both hardware and software VLANs.
+ * - Performs TCP segmentation offload (TSO) if applicable, or calculates
+ *   checksums for non-TSO packets.
+ * - Maps the packet for transmission and updates the ring state.
+ *
+ * Return: NETDEV_TX_OK on successful transmission, or NETDEV_TX_BUSY if the
+ * ring is full and the packet cannot be transmitted immediately.
+ */
 static int ixgbevf_xmit_frame_ring(struct sk_buff *skb,
 				   struct ixgbevf_ring *tx_ring)
 {
@@ -4858,6 +5068,24 @@ out_drop:
 	return NETDEV_TX_OK;
 }
 
+/**
+ * ixgbevf_xmit_frame - Transmit a network frame
+ * @skb: Pointer to the socket buffer (sk_buff) containing the packet
+ * @netdev: Pointer to the network device structure
+ *
+ * This function handles the transmission of a network frame. It performs
+ * several checks and operations to prepare the packet for transmission:
+ *
+ * - Drops the packet if its length is zero or negative.
+ * - Ensures the packet meets the minimum size requirement for the olinfo
+ *   paylen by padding the skb to at least 17 bytes.
+ * - Selects the appropriate TX ring based on the skb's queue mapping if
+ *   multi-queue support is available; otherwise, it uses the default TX ring.
+ * - Calls `ixgbevf_xmit_frame_ring` to handle the actual transmission on the
+ *   selected TX ring.
+ *
+ * Return: NETDEV_TX_OK on successful transmission.
+ */
 static netdev_tx_t ixgbevf_xmit_frame(struct sk_buff *skb,
 				      struct net_device *netdev)
 {
@@ -4963,6 +5191,26 @@ static int ixgbevf_change_mtu(struct net_device *netdev, int new_mtu)
 }
 
 #ifdef ETHTOOL_OPS_COMPAT
+/**
+ * ixgbevf_ioctl - Handle ioctl commands for the network device
+ * @netdev: Pointer to the network device structure
+ * @ifr: Pointer to the interface request structure
+ * @cmd: The ioctl command to be processed
+ *
+ * This function handles ioctl commands for the specified network device. It
+ * currently supports the SIOCETHTOOL command, which is used to perform
+ * ethtool operations via ioctl. If the command is SIOCETHTOOL, the function
+ * delegates the request to the ethtool_ioctl function. For any other command,
+ * the function returns -EOPNOTSUPP, indicating that the operation is not
+ * supported.
+ *
+ * The function is conditionally compiled to be included only if
+ * ETHTOOL_OPS_COMPAT is defined, indicating compatibility with older ethtool
+ * operations.
+ *
+ * Return: 0 on success for supported commands, -EOPNOTSUPP for unsupported
+ * commands.
+ */
 static int ixgbevf_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
 {
 	switch (cmd) {
@@ -4976,11 +5224,20 @@ static int ixgbevf_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 /**
- * ixgbevf_netpoll - Polling 'interrupt' used by things like netconsole to send
- * skbs without having to re-enable interrupts. It's not called while
- * the interrupt routine is executing.
- * @netdev: network interface device structure
- **/
+ * ixgbevf_netpoll - Handle polling for network device without interrupts
+ * @netdev: Pointer to the network device structure
+ *
+ * This function is used to poll the network device for packet transmission
+ * and reception without relying on hardware interrupts. It is typically used
+ * by features like netconsole to send and receive packets when interrupts are
+ * disabled. The function checks if the network interface is down and returns
+ * immediately if so. Otherwise, it iterates over each queue vector, sets the
+ * netpoll_rx flag to true, and calls `ixgbevf_msix_clean_rings` to process
+ * the rings.
+ *
+ * This function is conditionally compiled to be included only if
+ * CONFIG_NET_POLL_CONTROLLER is defined, indicating support for network polling.
+ */
 static void ixgbevf_netpoll(struct net_device *netdev)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
@@ -4999,6 +5256,22 @@ static void ixgbevf_netpoll(struct net_device *netdev)
 
 
 #ifndef USE_REBOOT_NOTIFIER
+/**
+ * ixgbevf_suspend - Suspend the network device
+ * @pdev: Pointer to the PCI device structure
+ * @state: Unused power management message indicating the suspend state
+ *
+ * This function suspends the network device, preparing it for a low-power
+ * state. It detaches the network device from the system, closes the device
+ * if it is running, and clears the interrupt scheme. The function then saves
+ * the PCI device state to preserve its configuration. If the device is not
+ * already disabled, it disables the PCI device to reduce power consumption.
+ *
+ * The @state parameter is marked as `__maybe_unused`, indicating that it is
+ * not utilized in this function but may be relevant in certain configurations.
+ *
+ * Return: 0 on success, or a negative error code if saving the PCI state fails.
+ */
 static int ixgbevf_suspend(struct pci_dev *pdev, pm_message_t __maybe_unused state)
 {
 	struct net_device *netdev = pci_get_drvdata(pdev);
@@ -5029,11 +5302,25 @@ static int ixgbevf_suspend(struct pci_dev *pdev, pm_message_t __maybe_unused sta
 }
 
 #ifdef CONFIG_PM
+/**
+ * ixgbevf_resume - Resume the network device from a suspended state
+ * @pdev: Pointer to the PCI device structure
+ *
+ * This function resumes the network device from a suspended state. It restores
+ * the PCI device state, enables the device memory, and reinitializes the
+ * hardware address. The function clears the disabled state of the adapter and
+ * sets the PCI device as a primary bus device. It then resets the adapter and
+ * initializes the interrupt scheme. If the network interface is running, the
+ * function opens the device to resume network operations. Finally, it attaches
+ * the network device to the system, making it available for use.
+ *
+ * Return: 0 on success, or a negative error code if the resume operation fails.
+ */
 static int ixgbevf_resume(struct pci_dev *pdev)
 {
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
-	u32 err;
+	int err;
 
 	pci_restore_state(pdev);
 	/*
@@ -5069,6 +5356,16 @@ static int ixgbevf_resume(struct pci_dev *pdev)
 }
 #endif /* CONFIG_PM */
 
+/**
+ * ixgbevf_shutdown - Shutdown the network device
+ * @pdev: Pointer to the PCI device structure
+ *
+ * This function performs a shutdown operation on the network device. It
+ * suspends the device by calling the `ixgbevf_suspend` function with the
+ * `PMSG_SUSPEND` message, which prepares the device for a safe shutdown.
+ * This is typically used to ensure that the device is in a consistent state
+ * before the system is powered off or rebooted.
+ */
 static void ixgbevf_shutdown(struct pci_dev *pdev)
 {
 	ixgbevf_suspend(pdev, PMSG_SUSPEND);
@@ -5093,6 +5390,24 @@ static void ixgbevf_get_tx_ring_stats(struct rtnl_link_stats64 *stats,
 	}
 }
 
+/**
+ * ixgbevf_get_stats64 - Retrieve 64-bit network statistics
+ * @netdev: Pointer to the network device structure
+ * @stats: Pointer to the rtnl_link_stats64 structure to be filled
+ *
+ * This function populates the provided rtnl_link_stats64 structure with
+ * 64-bit network statistics for the specified network device. It gathers
+ * statistics such as multicast packets, received bytes, and received packets
+ * from the RX rings. It also retrieves TX ring statistics for both standard
+ * and XDP (eXpress Data Path) queues. The function uses RCU (Read-Copy-Update)
+ * locking to safely access the ring statistics in a concurrent environment.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions, which may require different return types.
+ *
+ * Return: On some kernel versions, returns a pointer to the filled
+ * rtnl_link_stats64 structure. On others, it returns void.
+ */
 #ifdef HAVE_VOID_NDO_GET_STATS64
 static void ixgbevf_get_stats64(struct net_device *netdev,
 				struct rtnl_link_stats64 *stats)
@@ -5189,6 +5504,21 @@ static struct net_device_stats *ixgbevf_get_stats(struct net_device *netdev)
 #define IXGBEVF_MAX_MAC_HDR_LEN		127
 #define IXGBEVF_MAX_NETWORK_HDR_LEN	511
 
+/**
+ * ixgbevf_features_check - Validate and adjust network features for a packet
+ * @skb: Pointer to the socket buffer (sk_buff) containing the packet
+ * @dev: Pointer to the network device structure
+ * @features: The set of network features to be validated
+ *
+ * This function checks the network and MAC header lengths of a packet to
+ * ensure they can be described by a context descriptor. If the header lengths
+ * exceed the maximum allowed values, the function disables certain features
+ * such as hardware checksum offloading, SCTP CRC, VLAN tagging, and TCP
+ * segmentation offload (TSO). Additionally, if the packet is encapsulated and
+ * TSO MANGLEID is not supported, the function disables TSO for the packet.
+ *
+ * Return: The adjusted set of network features that are valid for the packet.
+ */
 static netdev_features_t
 ixgbevf_features_check(struct sk_buff *skb, struct net_device *dev,
 		       netdev_features_t features)
@@ -5263,6 +5593,25 @@ static int ixgbevf_xdp_setup(struct net_device *dev, struct bpf_prog *prog)
 	return 0;
 }
 
+/**
+ * ixgbevf_xdp - Handle XDP (eXpress Data Path) operations for the network device
+ * @dev: Pointer to the network device structure
+ * @xdp: Pointer to the netdev BPF or XDP structure containing the command and data
+ *
+ * This function handles XDP operations for the specified network device. It
+ * supports setting up an XDP program and querying the current XDP program
+ * status. The function processes the command specified in the @xdp structure:
+ *
+ * - XDP_SETUP_PROG: Sets up an XDP program by calling `ixgbevf_xdp_setup`.
+ * - XDP_QUERY_PROG: Queries the current XDP program status, including whether
+ *   a program is attached and its ID (conditionally compiled).
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and configurations, including variations in the structure type and
+ * available commands.
+ *
+ * Return: 0 on success, or -EINVAL if the command is not recognized.
+ */
 #ifdef HAVE_NDO_BPF
 static int ixgbevf_xdp(struct net_device *dev, struct netdev_bpf *xdp)
 #else
@@ -5686,15 +6035,21 @@ err_dma:
 }
 
 /**
- * ixgbevf_remove - Device Removal Routine
- * @pdev: PCI device information struct
+ * ixgbevf_remove - Remove the network device and clean up resources
+ * @pdev: Pointer to the PCI device structure
  *
- * ixgbevf_remove is called by the PCI subsystem to alert the driver
- * that it should release a PCI device.  The could be caused by a
- * Hot-Plug event, or because the driver is going to be removed from
- * memory.
- **/
-static void __devexit ixgbevf_remove(struct pci_dev *pdev)
+ * This function is called when the network device is being removed. It performs
+ * the necessary cleanup and resource deallocation for the device. The function
+ * sets the removing state for the adapter and cancels any pending service tasks.
+ * If the network device is registered, it unregisters the device. It then clears
+ * the interrupt scheme, unmaps I/O memory, and releases PCI regions. The function
+ * frees the RSS key and the network device structure. If the device was not
+ * already disabled, it disables the PCI device to ensure proper cleanup.
+ *
+ * The function also conditionally disables PCIe error reporting if supported by
+ * the kernel configuration.
+ */
+static void ixgbevf_remove(struct pci_dev *pdev)
 {
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct ixgbevf_adapter *adapter;
@@ -5816,6 +6171,21 @@ static void ixgbevf_io_resume(struct pci_dev *pdev)
 
 #if defined(HAVE_RHEL7_PCI_RESET_NOTIFY) || \
 	defined(HAVE_PCI_ERROR_HANDLER_RESET_NOTIFY)
+/**
+ * ixgbevf_io_reset_notify - Notify the driver of an I/O reset event
+ * @pdev: Pointer to the PCI device structure
+ * @prepare: Boolean flag indicating whether to prepare for reset (true) or
+ *           complete the reset (false)
+ *
+ * This function is called to notify the driver of an I/O reset event for the
+ * specified PCI device. If the @prepare flag is true, the function prepares
+ * the device for reset by suspending it. If the @prepare flag is false, the
+ * function resumes the device after the reset, provided power management
+ * support is enabled in the kernel configuration.
+ *
+ * The function supports conditional compilation to accommodate different kernel
+ * versions and configurations that provide reset notification support.
+ */
 static void ixgbevf_io_reset_notify(struct pci_dev *pdev, bool prepare)
 {
 	if (prepare)
