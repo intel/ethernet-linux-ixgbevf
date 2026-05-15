@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 /* SPDX-License-Identifier: GPL-2.0+ */
 #ifndef _LINUX_XARRAY_H
@@ -31,6 +31,8 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
+
+void kc_xarray_global_init(void);
 
 struct list_lru;
 

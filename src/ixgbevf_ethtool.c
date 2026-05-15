@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 /* ethtool support for ixgbe */
 #include "ixgbevf.h"
@@ -138,6 +138,11 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 
 	if (adapter->link_up) {
 		switch (adapter->link_speed) {
+		case IXGBE_LINK_SPEED_25GB_FULL:
+			speed = SPEED_25000;
+			ethtool_link_ksettings_add_link_mode(cmd, supported,
+							     25000baseCR_Full);
+			break;
 		case IXGBE_LINK_SPEED_10GB_FULL:
 			speed = SPEED_10000;
 			ethtool_link_ksettings_add_link_mode(cmd, supported,

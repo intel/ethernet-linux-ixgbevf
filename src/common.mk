@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright(c) 1999 - 2025 Intel Corporation.
+# Copyright(c) 1999 - 2026 Intel Corporation.
 
 #
 # common Makefile rules useful for out-of-tree Linux driver builds
@@ -272,6 +272,7 @@ endif
 endif
 endif
 
+EXTRA_CFLAGS += -std=gnu11
 EXTRA_CFLAGS += ${CFLAGS_EXTRA}
 
 # get the kernel version - we use this to find the correct install path
@@ -346,8 +347,8 @@ ifeq (,${MANDIR})
   MANDIR := $(firstword ${MANDIR})
 endif
 ifeq (,${MANDIR})
-  # fallback to /usr/man
-  MANDIR := /usr/man
+  # fallback to /usr/share/man (FHS standard; legacy /usr/man not present on RHEL 9+)
+  MANDIR := /usr/share/man
 endif
 
 ####################

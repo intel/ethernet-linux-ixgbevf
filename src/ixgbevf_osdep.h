@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 /* glue for the OS independent part of ixgbe
  * includes register access macros
@@ -68,10 +68,15 @@ enum {
 	switch (level) {							\
 	case IXGBE_ERROR_SOFTWARE:						\
 	case IXGBE_ERROR_CAUTION:						\
-	case IXGBE_ERROR_POLLING:						\
 		netif_warn(ixgbevf_hw_to_msg(hw), drv, ixgbevf_hw_to_netdev(hw),\
 			   format, ## arg);					\
 		break;								\
+	case IXGBE_ERROR_POLLING:					\
+		if (net_ratelimit())					\
+			netif_warn(ixgbevf_hw_to_msg(hw), drv,		\
+				   ixgbevf_hw_to_netdev(hw),		\
+				   format, ## arg);			\
+		break;							\
 	case IXGBE_ERROR_INVALID_STATE:						\
 	case IXGBE_ERROR_UNSUPPORTED:						\
 	case IXGBE_ERROR_ARGUMENT:						\

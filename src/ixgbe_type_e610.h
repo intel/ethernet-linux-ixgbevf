@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 #ifndef _IXGBE_TYPE_E610_H_
 #define _IXGBE_TYPE_E610_H_
@@ -718,6 +718,7 @@ struct ixgbe_aci_cmd_list_caps_elem {
 #define IXGBE_ACI_CAPS_PTP_BY_PHY_SUPP			BIT(0)
 #define IXGBE_ACI_CAPS_PTP_BY_PHY_LL			BIT(1)
 #endif /* !NO_PTP_SUPPORT */
+#define IXGBE_ACI_CAPS_EEE				0x009B
 	u8 major_ver;
 	u8 minor_ver;
 	/* Number of resources described by this capability */
@@ -811,9 +812,14 @@ IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_get_phy_caps);
 #define IXGBE_PHY_TYPE_LOW_25G_AUI_AOC_ACC	BIT_ULL(28)
 #define IXGBE_PHY_TYPE_LOW_25G_AUI_C2C		BIT_ULL(29)
 #define IXGBE_PHY_TYPE_LOW_MAX_INDEX		29
+#define IXGBE_PHY_TYPE_LOW_25G_MASK		GENMASK(29, 19)
 /* The second set of defines is for phy_type_high. */
 #define IXGBE_PHY_TYPE_HIGH_10BASE_T		BIT_ULL(1)
 #define IXGBE_PHY_TYPE_HIGH_10M_SGMII		BIT_ULL(2)
+#define IXGBE_PHY_TYPE_HIGH_25GBASE_KR		BIT_ULL(9)
+#define IXGBE_PHY_TYPE_HIGH_25GBASE_KR_S	BIT_ULL(10)
+#define IXGBE_PHY_TYPE_HIGH_25GBASE_KR1		BIT_ULL(11)
+#define IXGBE_PHY_TYPE_HIGH_25GBASE_AUI_C2C	BIT_ULL(12)
 #define IXGBE_PHY_TYPE_HIGH_2500M_SGMII		BIT_ULL(56)
 #define IXGBE_PHY_TYPE_HIGH_100M_USXGMII	BIT_ULL(57)
 #define IXGBE_PHY_TYPE_HIGH_1G_USXGMII		BIT_ULL(58)
@@ -821,6 +827,7 @@ IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_get_phy_caps);
 #define IXGBE_PHY_TYPE_HIGH_5G_USXGMII		BIT_ULL(60)
 #define IXGBE_PHY_TYPE_HIGH_10G_USXGMII		BIT_ULL(61)
 #define IXGBE_PHY_TYPE_HIGH_MAX_INDEX		61
+#define IXGBE_PHY_TYPE_HIGH_25G_MASK		GENMASK(12, 9)
 
 struct ixgbe_aci_cmd_get_phy_caps_data {
 	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
@@ -844,8 +851,8 @@ struct ixgbe_aci_cmd_get_phy_caps_data {
 #define IXGBE_ACI_PHY_EEE_EN_100BASE_TX			BIT(0)
 #define IXGBE_ACI_PHY_EEE_EN_1000BASE_T			BIT(1)
 #define IXGBE_ACI_PHY_EEE_EN_10GBASE_T			BIT(2)
-#define IXGBE_ACI_PHY_EEE_EN_5GBASE_T			BIT(12)
-#define IXGBE_ACI_PHY_EEE_EN_2_5GBASE_T			BIT(13)
+#define IXGBE_ACI_PHY_EEE_EN_5GBASE_T			BIT(11)
+#define IXGBE_ACI_PHY_EEE_EN_2_5GBASE_T			BIT(12)
 	__le16 eeer_value;
 	u8 phy_id_oui[4]; /* PHY/Module ID connected on the port */
 	u8 phy_fw_ver[8];
@@ -901,20 +908,26 @@ struct ixgbe_aci_cmd_set_phy_cfg {
 
 IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_set_phy_cfg);
 
+/* Set PHY config obsolete command data structure (<FW 1.40) */
+struct ixgbe_aci_cmd_set_phy_cfg_data_pre_1_40 {
+	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
+	__le64 phy_type_high; /* Use values from IXGBE_PHY_TYPE_HIGH_* */
+	u8 caps;
+	u8 low_power_ctrl_an;
+	__le16 eee_cap; /* Value from ixgbe_aci_get_phy_caps */
+	__le16 eeer_value; /* Use defines from ixgbe_aci_get_phy_caps */
+	u8 link_fec_opt; /* Use defines from ixgbe_aci_get_phy_caps */
+	u8 module_compliance_enforcement;
+};
+
+IXGBE_CHECK_STRUCT_LEN(24, ixgbe_aci_cmd_set_phy_cfg_data_pre_1_40);
+
 #pragma pack(1)
 /* Set PHY config command data structure */
 struct ixgbe_aci_cmd_set_phy_cfg_data {
 	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
 	__le64 phy_type_high; /* Use values from IXGBE_PHY_TYPE_HIGH_* */
 	u8 caps;
-#define IXGBE_ACI_PHY_ENA_VALID_MASK		MAKEMASK(0xef, 0)
-#define IXGBE_ACI_PHY_ENA_TX_PAUSE_ABILITY	BIT(0)
-#define IXGBE_ACI_PHY_ENA_RX_PAUSE_ABILITY	BIT(1)
-#define IXGBE_ACI_PHY_ENA_LOW_POWER		BIT(2)
-#define IXGBE_ACI_PHY_ENA_LINK			BIT(3)
-#define IXGBE_ACI_PHY_ENA_AUTO_LINK_UPDT	BIT(5)
-#define IXGBE_ACI_PHY_ENA_LESM			BIT(6)
-#define IXGBE_ACI_PHY_ENA_AUTO_FEC		BIT(7)
 	u8 low_power_ctrl_an;
 	__le16 eee_cap; /* Value from ixgbe_aci_get_phy_caps */
 	__le16 eeer_value; /* Use defines from ixgbe_aci_get_phy_caps */
@@ -924,6 +937,17 @@ struct ixgbe_aci_cmd_set_phy_cfg_data {
 };
 
 IXGBE_CHECK_STRUCT_LEN(26, ixgbe_aci_cmd_set_phy_cfg_data);
+
+/* Set PHY config capabilitied (@caps) defines */
+#define IXGBE_ACI_PHY_ENA_VALID_MASK		MAKEMASK(0xef, 0)
+#define IXGBE_ACI_PHY_ENA_TX_PAUSE_ABILITY	BIT(0)
+#define IXGBE_ACI_PHY_ENA_RX_PAUSE_ABILITY	BIT(1)
+#define IXGBE_ACI_PHY_ENA_LOW_POWER		BIT(2)
+#define IXGBE_ACI_PHY_ENA_LINK			BIT(3)
+#define IXGBE_ACI_PHY_ENA_AUTO_LINK_UPDT	BIT(5)
+#define IXGBE_ACI_PHY_ENA_LESM			BIT(6)
+#define IXGBE_ACI_PHY_ENA_AUTO_FEC		BIT(7)
+
 
 /* Restart AN command data structure (direct 0x0605)
  * Also used for response, with only the lport_num field present.
@@ -2306,6 +2330,12 @@ struct ixgbe_hw_common_caps {
 	u8 apm_wol_support;
 	u8 acpi_prog_mthd;
 	u8 proxy_support;
+	u8 eee_support;
+#define IXGBE_EEE_SUPPORT_100BASE_TX	BIT(0)
+#define IXGBE_EEE_SUPPORT_1000BASE_T	BIT(1)
+#define IXGBE_EEE_SUPPORT_10GBASE_T	BIT(2)
+#define IXGBE_EEE_SUPPORT_5GBASE_T	BIT(3)
+#define IXGBE_EEE_SUPPORT_2_5GBASE_T	BIT(4)
 	bool nvm_update_pending_nvm;
 	bool nvm_update_pending_orom;
 	bool nvm_update_pending_netlist;

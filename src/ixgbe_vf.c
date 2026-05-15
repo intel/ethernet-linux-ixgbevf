@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 #include "ixgbe_vf.h"
 
@@ -222,7 +222,7 @@ s32 ixgbe_reset_hw_vf(struct ixgbe_hw *hw)
 s32 ixgbe_stop_adapter_vf(struct ixgbe_hw *hw)
 {
 	u32 reg_val;
-	u16 i;
+	u32 i;
 
 	/*
 	 * Set the adapter_stopped flag so other driver functions stop touching
@@ -461,8 +461,8 @@ s32 ixgbe_get_link_state_vf(struct ixgbe_hw *hw, bool *link_state)
  *
  * Ask PF to provide link_up state and speed of the link.
  *
- * Return: IXGBE_ERR_MBX in the  case of mailbox error,
- * IXGBE_ERR_FEATURE_NOT_SUPPORTED if the op is not supported or 0 on success.
+ * Return: original mailbox error on communication failure (PF likely down),
+ * IXGBE_ERR_MBX on NACK, IXGBE_ERR_FEATURE_NOT_SUPPORTED or 0 on success.
  */
 int ixgbevf_get_pf_link_state(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 			      bool *link_up)
@@ -481,16 +481,19 @@ int ixgbevf_get_pf_link_state(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 	msgbuf[0] = IXGBE_VF_GET_PF_LINK_STATE;
 
 	err = ixgbevf_write_msg_read_ack(hw, msgbuf, msgbuf, 3);
-	if (err || (msgbuf[0] & IXGBE_VT_MSGTYPE_FAILURE)) {
-		err = IXGBE_ERR_MBX;
+	if (err) {
+		/* Preserve the original error (e.g. timeout vs NACK) */
 		*speed = IXGBE_LINK_SPEED_UNKNOWN;
-		/* No need to set @link_up to false as it will be done in
-		 * ixgbe_check_mac_link_vf().
-		 */
-	} else {
-		*speed = msgbuf[1];
-		*link_up = msgbuf[2];
+		return err;
 	}
+	if (msgbuf[0] & IXGBE_VT_MSGTYPE_FAILURE) {
+		/* PF NACKed - VF must reset before PF will talk to it */
+		*speed = IXGBE_LINK_SPEED_UNKNOWN;
+		return IXGBE_ERR_MBX;
+	}
+
+	*speed = msgbuf[1];
+	*link_up = msgbuf[2];
 
 	return err;
 }
@@ -737,6 +740,9 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 
 	UNREFERENCED_1PARAMETER(autoneg_wait_to_complete);
 
+	if (!link_up)
+		return IXGBE_ERR_PARAM;
+
 	/* If we were hit with a reset drop the link */
 	if (!mbx->ops[0].check_for_rst(hw, 0) || !mbx->timeout)
 		mac->get_link_status = true;
@@ -750,10 +756,20 @@ s32 ixgbe_check_mac_link_vf(struct ixgbe_hw *hw, ixgbe_link_speed *speed,
 			goto out;
 	} else {
 		ret_val = ixgbevf_get_pf_link_state(hw, speed, link_up);
-		if (ret_val == IXGBE_ERR_FEATURE_NOT_SUPPORTED)
+		if (ret_val == IXGBE_ERR_FEATURE_NOT_SUPPORTED) {
 			ixgbe_read_vflinks(hw, speed, link_up);
-		else if (ret_val)
-			goto out;
+		} else if (ret_val == IXGBE_ERR_MBX) {
+			/* NACK - let watchdog trigger VF reset */
+			*link_up = false;
+			return ret_val;
+		} else if (ret_val) {
+			/* Timeout - ixgbe_mbx_log_timeout batches the message */
+			*link_up = false;
+			return 0;
+		} else {
+			if (!*link_up)
+				goto out;
+		}
 	}
 
 	/* if the read failed it could just be a mailbox collision, best wait
