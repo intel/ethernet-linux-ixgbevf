@@ -102,6 +102,8 @@
 #define E610_SR_OROM_BANK_SIZE			0x45
 #define E610_SR_NETLIST_BANK_PTR		0x46
 #define E610_SR_NETLIST_BANK_SIZE		0x47
+#define E610_SR_PQC_MANIFEST_BANK_PTR		0x4E
+#define E610_SR_PQC_MANIFEST_BANK_SIZE		0x4F
 #define E610_SR_POINTER_TYPE_BIT		BIT(15)
 #define E610_SR_POINTER_MASK			0x7fff
 #define E610_SR_HALF_4KB_SECTOR_UNITS		2048
@@ -702,6 +704,7 @@ struct ixgbe_aci_cmd_list_caps_elem {
 #define IXGBE_ACI_CAPS_OROM_VER				0x004A
 #define IXGBE_ACI_CAPS_PENDING_OROM_VER			0x004B
 #define IXGBE_ACI_CAPS_PENDING_NET_VER			0x004D
+#define IXGBE_ACI_CAPS_EXTERNAL_PQC_ROT_PRESENT		0x004E
 #define IXGBE_ACI_CAPS_INLINE_IPSEC			0x0070
 #define IXGBE_ACI_CAPS_NUM_ENABLED_PORTS		0x0072
 #define IXGBE_ACI_CAPS_PCIE_RESET_AVOIDANCE		0x0076
@@ -712,6 +715,7 @@ struct ixgbe_aci_cmd_list_caps_elem {
 #define IXGBE_ACI_CAPS_EXT_TOPO_DEV_IMG2		0x0083
 #define IXGBE_ACI_CAPS_EXT_TOPO_DEV_IMG3		0x0084
 #define IXGBE_ACI_CAPS_OROM_RECOVERY_UPDATE		0x0090
+#define IXGBE_ACI_CAPS_PQC_CERT_PROVISIONING	0x0091
 #define IXGBE_ACI_CAPS_NEXT_CLUSTER_ID			0x0096
 #ifndef NO_PTP_SUPPORT
 #define IXGBE_ACI_CAPS_PTP_BY_PHY			0x0097
@@ -812,7 +816,6 @@ IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_get_phy_caps);
 #define IXGBE_PHY_TYPE_LOW_25G_AUI_AOC_ACC	BIT_ULL(28)
 #define IXGBE_PHY_TYPE_LOW_25G_AUI_C2C		BIT_ULL(29)
 #define IXGBE_PHY_TYPE_LOW_MAX_INDEX		29
-#define IXGBE_PHY_TYPE_LOW_25G_MASK		GENMASK(29, 19)
 /* The second set of defines is for phy_type_high. */
 #define IXGBE_PHY_TYPE_HIGH_10BASE_T		BIT_ULL(1)
 #define IXGBE_PHY_TYPE_HIGH_10M_SGMII		BIT_ULL(2)
@@ -827,7 +830,6 @@ IXGBE_CHECK_PARAM_LEN(ixgbe_aci_cmd_get_phy_caps);
 #define IXGBE_PHY_TYPE_HIGH_5G_USXGMII		BIT_ULL(60)
 #define IXGBE_PHY_TYPE_HIGH_10G_USXGMII		BIT_ULL(61)
 #define IXGBE_PHY_TYPE_HIGH_MAX_INDEX		61
-#define IXGBE_PHY_TYPE_HIGH_25G_MASK		GENMASK(12, 9)
 
 struct ixgbe_aci_cmd_get_phy_caps_data {
 	__le64 phy_type_low; /* Use values from IXGBE_PHY_TYPE_LOW_* */
@@ -2342,6 +2344,7 @@ struct ixgbe_hw_common_caps {
 #define IXGBE_NVM_PENDING_NVM_IMAGE		BIT(0)
 #define IXGBE_NVM_PENDING_OROM			BIT(1)
 #define IXGBE_NVM_PENDING_NETLIST		BIT(2)
+	bool external_pqc_rot_present;
 	bool sec_rev_disabled;
 	bool update_disabled;
 	bool nvm_unified_update;
@@ -2370,6 +2373,7 @@ struct ixgbe_hw_common_caps {
 #define IXGBE_EXT_TOPO_DEV_IMG_PROG_EN	BIT(1)
 	/* Support for OROM update in Recovery Mode. */
 	bool orom_recovery_update;
+	bool pqc_cert_provisioning;
 	bool next_cluster_id_support;
 #ifndef NO_PTP_SUPPORT
 	bool ptp_by_phy_support : 1;
