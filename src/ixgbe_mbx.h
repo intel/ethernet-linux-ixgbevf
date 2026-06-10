@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 #ifndef _IXGBE_MBX_H_
 #define _IXGBE_MBX_H_
@@ -38,6 +38,10 @@ struct ixgbe_mbx_info {
 	u32 udelay;
 	u32 vf_mailbox;
 	u16 size;
+
+	u32 msg_timeout_count;	/* suppressed timeouts since last print */
+	u8  msg_exp;		/* current backoff exponent (0..16) */
+	unsigned long msg_window_end;	/* jiffies when quiet window expires */
 };
 
 #include "ixgbe_vf.h"

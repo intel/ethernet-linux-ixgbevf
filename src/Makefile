@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright(c) 1999 - 2025 Intel Corporation.
+# Copyright(c) 1999 - 2026 Intel Corporation.
 
 ifneq ($(KERNELRELEASE),)
 src ?= .
@@ -21,6 +21,10 @@ endef
 ixgbevf-y := $(strip ${ixgbevf-y})
 ixgbevf-${CONFIG_PCI_HYPERV:m=y} += ixgbe_hv_vf.o
 ixgbevf-y += kcompat.o
+
+ifeq ($(shell grep HAVE_XARRAY_API $(src)/kcompat_generated_defs.h),)
+ixgbevf-y += kcompat_xarray.o
+endif
 
 else	# ifneq($(KERNELRELEASE),)
 # normal makefile

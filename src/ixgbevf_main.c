@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright(c) 1999 - 2025 Intel Corporation. */
+/* Copyright(c) 1999 - 2026 Intel Corporation. */
 
 /******************************************************************************
  Copyright (c)2006 - 2007 Myricom, Inc. for some LRO specific code
@@ -39,12 +39,12 @@
 #endif /* HAVE_XDP_SUPPORT */
 #define RELEASE_TAG
 
-#define DRV_VERSION __stringify(5.2.2) RELEASE_TAG
+#define DRV_VERSION __stringify(5.3.25) RELEASE_TAG
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
 static const char ixgbevf_driver_string[] = DRV_SUMMARY;
-static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2025 Intel Corporation.";
+static const char ixgbevf_copyright[] = "Copyright(c) 1999 - 2026 Intel Corporation.";
 
 static struct ixgbevf_info ixgbevf_82599_vf_info = {
 	.mac	= ixgbe_mac_82599_vf,
@@ -2430,16 +2430,21 @@ static void ixgbevf_configure_rx_ring(struct ixgbevf_adapter *adapter,
 
 	/* RXDCTL.RLPML does not work on 82599 */
 	if (adapter->hw.mac.type != ixgbe_mac_82599_vf) {
+		u32 rlpml = adapter->netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
+
 		rxdctl &= ~(IXGBE_RXDCTL_RLPMLMASK |
 			    IXGBE_RXDCTL_RLPML_EN);
 
 #if (PAGE_SIZE < 8192)
-		/* Limit the maximum frame size so we don't overrun the skb */
+		/* When using build_skb, cap rlpml at both the MTU and the SKB
+		 * buffer size to prevent overruns when PF MTU is larger than
+		 * VF MTU.
+		 */
 		if (ring_uses_build_skb(ring) &&
 		    !ring_uses_large_buffer(ring))
-			rxdctl |= IXGBEVF_MAX_FRAME_BUILD_SKB |
-				  IXGBE_RXDCTL_RLPML_EN;
+			rlpml = min(rlpml, (u32)IXGBEVF_MAX_FRAME_BUILD_SKB);
 #endif
+		rxdctl |= rlpml | IXGBE_RXDCTL_RLPML_EN;
 	}
 
 	rxdctl |= IXGBE_RXDCTL_ENABLE | IXGBE_RXDCTL_VME;
@@ -3280,7 +3285,8 @@ void ixgbevf_reset(struct ixgbevf_adapter *adapter)
 	    test_bit(__IXGBEVF_REMOVING, &adapter->state))
 		return;
 	if (hw->mac.ops.reset_hw(hw)) {
-		DPRINTK(PROBE, ERR, "PF still resetting\n");
+		if (net_ratelimit())
+			DPRINTK(PROBE, ERR, "PF still resetting\n");
 	} else {
 		hw->mac.ops.init_hw(hw);
 		ixgbevf_negotiate_api(adapter);
