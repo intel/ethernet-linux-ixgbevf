@@ -37,9 +37,8 @@
 #include <linux/atomic.h>
 
 #endif /* HAVE_XDP_SUPPORT */
-#define RELEASE_TAG
 
-#define DRV_VERSION __stringify(5.3.25) RELEASE_TAG
+#define DRV_VERSION __stringify(5.3.36)
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -284,6 +283,100 @@ s32 ixgbevf_hv_reset_hw_vf(struct ixgbe_hw *hw)
 		"PCI_MMCONFIG needs to be enabled for Hyper-V\n");
 	return -EOPNOTSUPP;
 #endif
+}
+
+/**
+ * ixgbevf_hv_check_mac_link_e6xx - check link for Hyper-V E6xx VFs
+ * @hw: pointer to hardware structure
+ * @speed: pointer to link speed
+ * @link_up: true if link is up, false otherwise
+ * @autoneg_wait_to_complete: unused
+ *
+ * For Hyper-V Linkville VFs the link status is exposed through emulated
+ * PCI config space at offset 0x209 in VFLINKS register format.
+ *
+ * Return: 0 on success, negative error code on failure.
+ */
+s32 ixgbevf_hv_check_mac_link_e6xx(struct ixgbe_hw *hw,
+				   ixgbe_link_speed *speed,
+				   bool *link_up,
+				   bool autoneg_wait_to_complete)
+{
+	struct ixgbevf_adapter *adapter = hw->back;
+	struct ixgbe_mbx_info *mbx = &hw->mbx;
+	struct ixgbe_mac_info *mac = &hw->mac;
+	u32 links_reg = 0;
+	u8 byte;
+	int ret;
+
+	UNREFERENCED_1PARAMETER(autoneg_wait_to_complete);
+
+	/* If PF reset was detected, mark link status as stale so that
+	 * it gets re-read from the emulated config space register.
+	 */
+	if (!mbx->ops[0].check_for_rst(hw, 0) || !mbx->timeout)
+		mac->get_link_status = true;
+
+	if (!mac->get_link_status)
+		goto out;
+
+#if IS_ENABLED(CONFIG_PCI_MMCONFIG)
+	for (int i = 0; i < IXGBE_HV_LINK_STATUS_SIZE; i++) {
+		ret = pci_read_config_byte(adapter->pdev,
+					   IXGBE_HV_LINK_STATUS_OFFSET + i,
+					   &byte);
+		if (ret)
+			return ret;
+
+		links_reg |= (u32)byte << (i * BITS_PER_BYTE);
+	}
+#else
+	dev_err(&adapter->pdev->dev,
+		"PCI_MMCONFIG needs to be enabled for Hyper-V\n");
+	return -EOPNOTSUPP;
+#endif
+
+	/* Link down — skip speed decoding, out: will set *link_up = false */
+	if (!(links_reg & IXGBE_LINKS_UP))
+		goto out;
+
+	switch (links_reg & IXGBE_LINKS_SPEED_82599) {
+	case IXGBE_LINKS_SPEED_10G_82599:
+		*speed = IXGBE_LINK_SPEED_10GB_FULL;
+		if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
+			*speed = IXGBE_LINK_SPEED_2_5GB_FULL;
+		break;
+	case IXGBE_LINKS_SPEED_1G_82599:
+		*speed = IXGBE_LINK_SPEED_1GB_FULL;
+		break;
+	case IXGBE_LINKS_SPEED_100_82599:
+		*speed = IXGBE_LINK_SPEED_100_FULL;
+		if (links_reg & IXGBE_LINKS_SPEED_NON_STD)
+			*speed = IXGBE_LINK_SPEED_5GB_FULL;
+		break;
+	default:
+		*speed = IXGBE_LINK_SPEED_UNKNOWN;
+		break;
+	}
+
+	mac->get_link_status = false;
+
+out:
+	*link_up = !mac->get_link_status;
+	return 0;
+}
+
+/**
+ * ixgbevf_hv_init_ops_e6xx_vf - Initialize ops for Hyper-V E6xx VFs
+ * @hw: pointer to hardware structure
+ *
+ * Sets up Hyper-V VF ops and overrides check_link with E6xx-specific
+ * implementation that reads link status from emulated PCI config space.
+ */
+static void ixgbevf_hv_init_ops_e6xx_vf(struct ixgbe_hw *hw)
+{
+	ixgbevf_hv_init_ops_vf(hw);
+	hw->mac.ops.check_link = ixgbevf_hv_check_mac_link_e6xx;
 }
 
 #endif
@@ -3815,7 +3908,7 @@ static int __devinit ixgbevf_sw_init(struct ixgbevf_adapter *adapter)
 		break;
 	case IXGBE_DEV_ID_E610_VF:
 		if (hw->subsystem_device_id == IXGBE_SUBDEV_ID_E610_VF_HV) {
-			ixgbevf_hv_init_ops_vf(hw);
+			ixgbevf_hv_init_ops_e6xx_vf(hw);
 			break;
 		}
 		fallthrough;

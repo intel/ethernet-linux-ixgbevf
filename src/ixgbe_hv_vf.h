@@ -10,6 +10,12 @@
  */
 #define IXGBE_HV_RESET_OFFSET           0x201
 
+/* On Hyper-V Linkville, link status is exposed via emulated PCI
+ * config space and should be read on demand.
+ */
+#define IXGBE_HV_LINK_STATUS_OFFSET      0x209
+#define IXGBE_HV_LINK_STATUS_SIZE        4
+
 #include "ixgbe_vf.h"
 
 s32 ixgbevf_hv_init_ops_vf(struct ixgbe_hw *hw);
@@ -26,6 +32,10 @@ s32 ixgbevf_hv_set_rlpml_vf(struct ixgbe_hw *hw, u16 max_size);
 int ixgbevf_hv_negotiate_api_version_vf(struct ixgbe_hw *hw, int api);
 
 extern s32 ixgbevf_hv_reset_hw_vf(struct ixgbe_hw *hw);
+extern s32 ixgbevf_hv_check_mac_link_e6xx(struct ixgbe_hw *hw,
+					   ixgbe_link_speed *speed,
+					   bool *link_up,
+					   bool autoneg_wait_to_complete);
 extern s32 ixgbevf_hv_set_rar_vf(struct ixgbe_hw *hw, u32 index, u8 *addr,
 				 u32 vmdq, u32 enable_addr);
 #endif /* _IXGBE_HV_VF_H_ */

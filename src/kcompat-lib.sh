@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright(c) 1999 - 2026 Intel Corporation.
 
+# SPDX-License-Identifier: GPL-2.0
+
+
+
 # to be sourced
 
 # General shell helpers

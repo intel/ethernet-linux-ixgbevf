@@ -1,6 +1,6 @@
 Name: ixgbevf
 Summary: Intel(R) 10GbE PCI Express Virtual Function Driver
-Version: 5.3.25
+Version: 5.3.36
 Release: 1
 Source: %{name}-%{version}.tar.gz
 Vendor: Intel Corporation
