@@ -1,6 +1,6 @@
 Name: ixgbevf
 Summary: Intel(R) 10GbE PCI Express Virtual Function Driver
-Version: 5.3.36
+Version: 5.3.87
 Release: 1
 Source: %{name}-%{version}.tar.gz
 Vendor: Intel Corporation
@@ -61,9 +61,13 @@ make -C src INSTALL_MOD_PATH=%{buildroot} MANDIR=%{_mandir} modules_install mand
 if [ -d %{buildroot}/lib/modules ]; then
 	find %{buildroot}/lib/modules/ -name 'modules.*' -exec rm -f {} \;
 fi
+
 cd %{buildroot}
 find . -name "ixgbevf.ko" -printf "/%p\n" \
 	>%{_builddir}/%{name}-%{version}/file.list
+
+find . -path '*/ddp/*' -printf "/%p\n" \
+	>>%{_builddir}/%{name}-%{version}/file.list
 
 export _ksrc=%{_usrsrc}/kernels/%{kernel_ver}
 cd %{buildroot}

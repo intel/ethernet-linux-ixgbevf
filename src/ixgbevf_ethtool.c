@@ -131,7 +131,19 @@ static int ixgbevf_get_settings(struct net_device *netdev,
 #endif
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+	struct ixgbe_hw *hw = &adapter->hw;
 	__u32 speed = SPEED_UNKNOWN;
+
+	/* E6xx Hyper-V VFs: read current link speed from PCI config space
+	 * on every link speed query.
+	 */
+	if (hw->mac.type == ixgbe_mac_E610_vf) {
+		spin_lock_bh(&adapter->mbx_lock);
+		hw->mac.get_link_status = true;
+		hw->mac.ops.check_link(hw, &adapter->link_speed,
+				       &adapter->link_up, false);
+		spin_unlock_bh(&adapter->mbx_lock);
+	}
 
 #ifdef HAVE_ETHTOOL_CONVERT_U32_AND_LINK_MODE
 	ethtool_link_ksettings_zero_link_mode(cmd, supported);
@@ -1949,6 +1961,15 @@ static int ixgbevf_get_rss_key_locked(struct ixgbe_hw *hw, u8 *rss_key)
 	return 0;
 }
 
+#ifdef HAVE_ETHTOOL_GET_RX_RING_COUNT
+static u32 ixgbevf_get_rx_ring_count(struct net_device *netdev)
+{
+	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
+
+	return adapter->num_rx_queues;
+}
+#endif /* HAVE_ETHTOOL_GET_RX_RING_COUNT */
+
 /**
  * ixgbevf_get_rxfh_indir_size - Get the size of the RX flow hash indirection table
  * @netdev: Pointer to the network device structure
@@ -2146,6 +2167,9 @@ static struct ethtool_ops ixgbevf_ethtool_ops = {
 	.get_rxfh_indir_size	= ixgbevf_get_rxfh_indir_size,
 	.get_rxfh_key_size	= ixgbevf_get_rxfh_key_size,
 	.get_rxfh		= ixgbevf_get_rxfh,
+#ifdef HAVE_ETHTOOL_GET_RX_RING_COUNT
+	.get_rx_ring_count	= ixgbevf_get_rx_ring_count,
+#endif /* HAVE_ETHTOOL_GET_RX_RING_COUNT */
 #endif /* ETHTOOL_GRSSH && ETHTOOL_SRSSH */
 #endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
 	.get_ringparam          = ixgbevf_get_ringparam,

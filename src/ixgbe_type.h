@@ -456,6 +456,7 @@ struct ixgbe_nvm_version {
 #define IXGBE_LMVM_TX		0x8124
 #define IXGBE_WQBR_RX(_i)	(0x2FB0 + ((_i) * 4)) /* 4 total */
 #define IXGBE_WQBR_TX(_i)	(0x8130 + ((_i) * 4)) /* 4 total */
+#define IXGBE_WQBR_REG_COUNT	4
 #define IXGBE_L34T_IMIR(_i)	(0x0E800 + ((_i) * 4)) /*128 of these (0-127)*/
 #define IXGBE_RXFECCERR0	0x051B8
 #define IXGBE_LLITHRESH		0x0EC90
@@ -3285,7 +3286,13 @@ struct ixgbe_adv_tx_context_desc {
 #define IXGBE_ADVTXD_MACLEN_SHIFT	9  /* Adv ctxt desc mac len shift */
 #define IXGBE_ADVTXD_MACLEN_MASK	(0x7F << IXGBE_ADVTXD_MACLEN_SHIFT) /* Adv ctxt desc mac len mask */
 #define IXGBE_ADVTXD_VLAN_SHIFT		16  /* Adv ctxt vlan tag shift */
-#define IXGBE_ADVTXD_TUCMD_TSEL		0x00000008 /* if set Timer 0, else Monotonic */
+/* TSel is TUCMD bit 3. TUCMD occupies descriptor bits [19:10], so TSel is
+ * descriptor bit 13. The neighbouring TUCMD flags below confirm the base:
+ * IPV4 is TUCMD bit 0 (descriptor bit 10) and L4T is TUCMD bits 2:1
+ * (descriptor bits 12:11). On E630 this bit replaces the 82599 MKRREQ.
+ * If set Timer 0 is latched, otherwise the monotonic timer.
+ */
+#define IXGBE_ADVTXD_TUCMD_TSEL		0x00002000
 #define IXGBE_ADVTXD_TUCMD_IPV4		0x00000400 /* IP Packet Type: 1=IPv4 */
 #define IXGBE_ADVTXD_TUCMD_IPV6		0x00000000 /* IP Packet Type: 0=IPv6 */
 #define IXGBE_ADVTXD_TUCMD_L4T_UDP	0x00000000 /* L4 Packet TYPE of UDP */
@@ -4022,4 +4029,6 @@ struct ixgbe_eeprom_operations {
 #define IXGBE_HOST_INTERFACE_APPLY_UPDATE_CMD			0x38
 #define IXGBE_HOST_INTERFACE_MASK_CMD				0x000000FF
 
+#define IXGBE_LINK_SPEED_KBPS_100M	100000
+#define IXGBE_LINK_SPEED_KBPS_25G	25000000
 #endif /* _IXGBE_TYPE_H_ */

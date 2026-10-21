@@ -38,7 +38,7 @@
 
 #endif /* HAVE_XDP_SUPPORT */
 
-#define DRV_VERSION __stringify(5.3.36)
+#define DRV_VERSION __stringify(5.3.87)
 #define DRV_SUMMARY __stringify(Intel(R) 10GbE PCI Express Virtual Function Driver)
 const char ixgbevf_driver_version[] = DRV_VERSION;
 char ixgbevf_driver_name[] = "ixgbevf";
@@ -4425,12 +4425,18 @@ int ixgbevf_setup_rx_resources(struct ixgbevf_adapter *adapter,
 	/* XDP RX-queue info */
 	if (xdp_rxq_info_reg(&rx_ring->xdp_rxq, adapter->netdev,
 			     rx_ring->queue_index, 0) < 0)
-		goto err;
+		goto err_desc;
 
 #endif /* HAVE_XDP_BUFF_RXQ */
 	rx_ring->xdp_prog = adapter->xdp_prog;
 
 	return 0;
+#ifdef HAVE_XDP_BUFF_RXQ
+err_desc:
+	dma_free_coherent(rx_ring->dev, rx_ring->size, rx_ring->desc,
+			  rx_ring->dma);
+	rx_ring->desc = NULL;
+ #endif /* HAVE_XDP_BUFF_RXQ */
 err:
 	vfree(rx_ring->rx_buffer_info);
 	rx_ring->rx_buffer_info = NULL;
